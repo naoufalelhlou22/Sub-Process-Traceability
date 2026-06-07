@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo ========================================================
 echo Building HI-LEX Sub-Process Traceability Executable
 echo ========================================================
@@ -16,7 +17,7 @@ echo Compiling... This may take a minute or two...
 echo.
 
 :: Run PyInstaller
-python3-64.exe -m PyInstaller --noconsole --onefile --distpath "..\dist" --workpath "..\build" --specpath ".." --add-data "..\assets;assets" --icon="..\assets\logo_en.png" --version-file=file_version_info.txt "..\src\main.py"
+python3-64.exe -m PyInstaller --noconsole --onefile --clean --name "Sub-Process Traceability" --distpath "..\dist" --workpath "..\build" --specpath ".." --add-data "..\assets;assets" --icon="..\assets\logo_en.png" --version-file=file_version_info.txt "..\src\main.py"
 
 echo.
 echo ========================================================
