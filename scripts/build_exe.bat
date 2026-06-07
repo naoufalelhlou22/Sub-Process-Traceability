@@ -16,7 +16,7 @@ echo Compiling... This may take a minute or two...
 echo.
 
 :: Run PyInstaller
-python3-64.exe -m PyInstaller --noconsole --onefile --add-data "assets;assets" --icon="assets/logo_en.png" --version-file=file_version_info.txt "Sub-Process Traceability.py"
+python3-64.exe -m PyInstaller --noconsole --onefile --distpath "..\dist" --workpath "..\build" --specpath ".." --add-data "..\assets;assets" --icon="..\assets\logo_en.png" --version-file=file_version_info.txt "..\src\main.py"
 
 echo.
 echo ========================================================

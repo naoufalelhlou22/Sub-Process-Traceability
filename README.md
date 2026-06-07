@@ -30,7 +30,7 @@ Make sure you have Python 3.8+ installed on your system.
 To run the application in development mode:
 
 ```bash
-python traceability_v3.py
+python "Sub-Process Traceability.py"
 ```
 
 ## Zebra Printer Configuration
@@ -47,13 +47,13 @@ If you wish to deploy the application on Windows without needing Python installe
 1. Ensure PyInstaller is installed (included in `requirements.txt`).
 2. Double-click the included `build_exe.bat` file.
 3. Wait for the compilation process to finish.
-4. Your standalone application will be generated in the `dist` folder as `traceability_v3.exe`.
+4. Your standalone application will be generated in the `dist` folder as `Sub-Process Traceability.exe`.
 
 *Note: The compilation script automatically embeds the `assets` directory (images/logos) directly into the executable.*
 
 ## Project Structure
 
-- `traceability_v3.py` : Main application source code.
+- `Sub-Process Traceability.py` : Main application source code.
 - `requirements.txt` : List of Python dependencies.
 - `build_exe.bat` : Batch script for compiling the executable using PyInstaller.
 - `assets/` : Contains UI graphics like the HI-LEX logo, taskbar icons, and settings icons.

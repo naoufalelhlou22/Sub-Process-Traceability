@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 0, 0),
-    prodvers=(1, 0, 0, 0),
+    filevers=(1, 1, 0, 0),
+    prodvers=(1, 1, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,12 +16,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'HI-LEX ACT'),
         StringStruct('FileDescription', 'Sub-Process Traceability'),
-        StringStruct('FileVersion', '1.0.0.0'),
+        StringStruct('FileVersion', '1.1.0.0'),
         StringStruct('InternalName', 'Sub-Process Traceability'),
-        StringStruct('LegalCopyright', 'HI-LEX ACT . Naoufal El Hlou'),
+        StringStruct('LegalCopyright', 'HI-LEX ACT . Naoufal El Hlou & Taketo Oi'),
         StringStruct('OriginalFilename', 'Sub-Process Traceability.exe'),
         StringStruct('ProductName', 'Sub-Process Traceability App'),
-        StringStruct('ProductVersion', '1.0.0.0')])
+        StringStruct('ProductVersion', '1.1.0.0')])
       ]), 
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]

@@ -1,0 +1,472 @@
+{
+    "AT-V07-11313-A-SUB": [
+        "SUB BODY N R",
+        [
+            [
+                "AT-V07-11313-P-WIE",
+                "BODY R"
+            ],
+            [
+                "AT-V07-11323-E-WIE",
+                "BUMPER RUBBER R"
+            ]
+        ]
+    ],
+    "AT-V07-11213-A-SUB": [
+        "SUB BODY EMG R",
+        [
+            [
+                "AT-V07-11213-E-WIE",
+                "BODY(EMERGENCY) R"
+            ],
+            [
+                "AT-V07-11323-E-WIE",
+                "BUMPER RUBBER R"
+            ]
+        ]
+    ],
+    "AT-V07-11314-A-SUB": [
+        "SUB BODY N L",
+        [
+            [
+                "AT-V07-11314-M-WIE",
+                "BODY L"
+            ],
+            [
+                "AT-V07-11324-E-WIE",
+                "BUMPER RUBBER L"
+            ]
+        ]
+    ],
+    "AT-V07-11214-A-SUB": [
+        "SUB BODY EMG L",
+        [
+            [
+                "AT-V07-11214-E-WIE",
+                "BODY(EMERGENCY) L"
+            ],
+            [
+                "AT-V07-11324-E-WIE",
+                "BUMPER RUBBER L"
+            ]
+        ]
+    ],
+    "AT-V80-11213-A-SUB": [
+        "SUB BODY EMG R XDD",
+        [
+            [
+                "AT-V07-11213-E-WIE",
+                "BODY(EMERGENCY) R"
+            ],
+            [
+                "AT-V07-11223-E-WIE",
+                "CATCH BUMPER R"
+            ],
+            [
+                "AT-V07-11323-E-WIE",
+                "BUMPER RUBBER R"
+            ]
+        ]
+    ],
+    "AT-V80-11314-A-SUB": [
+        "SUB BODY N L XDD",
+        [
+            [
+                "AT-V07-11314-M-WIE",
+                "BODY L"
+            ],
+            [
+                "AT-V07-11224-E-WIE",
+                "CATCH BUMPER L"
+            ],
+            [
+                "AT-V07-11324-E-WIE",
+                "BUMPER RUBBER L"
+            ]
+        ]
+    ],
+    "AT-V07-11311-A-SUB": [
+        "Back plate R sub",
+        [
+            [
+                "AT-V07-11311-J-WIE",
+                "BACK PLATE R"
+            ],
+            [
+                "AT-V07-11359-B-WIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ],
+    "AT-V07-11312-A-SUB": [
+        "Back plate L sub",
+        [
+            [
+                "AT-V07-11312-J-WIE",
+                "BACK PLATE L"
+            ],
+            [
+                "AT-V07-11359-B-WIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ],
+    "AT-V80-11311-A-SUB": [
+        "Back plate R sub XDD",
+        [
+            [
+                "AT-V80-11311-C-WIE",
+                "BACK PLATE (ZnNi) R"
+            ],
+            [
+                "AT-V07-11359-B-WIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ],
+    "AT-V80-11312-A-SUB": [
+        "Back plate L sub XDD",
+        [
+            [
+                "AT-V80-11312-C-WIE",
+                "BACK PLATE (ZnNi) L"
+            ],
+            [
+                "AT-V07-11359-B-WIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ],
+    "AT-V07-14311-A-SUB": [
+        "Lever Child R sub (short type)",
+        [
+            [
+                "AT-V07-14311-F-WIE",
+                "LEVER CHILD R"
+            ],
+            [
+                "AT-V07-14315-C-WIE",
+                "SPRING CHILD R"
+            ],
+            [
+                "AT-V07-14319-B-WIE",
+                "PIN CHILD"
+            ]
+        ]
+    ],
+    "AT-V07-14341-A-SUB": [
+        "Lever Child R sub (long type)",
+        [
+            [
+                "AT-V07-14341-A-WIE",
+                "LEVER CHILD LONG TYPE R"
+            ],
+            [
+                "AT-V07-14315-C-WIE",
+                "SPRING CHILD R"
+            ],
+            [
+                "AT-V07-14319-B-WIE",
+                "PIN CHILD"
+            ]
+        ]
+    ],
+    "AT-V07-14312-A-SUB": [
+        "Lever Child L sub (short type)",
+        [
+            [
+                "AT-V07-14312-F-WIE",
+                "LEVER CHILD L"
+            ],
+            [
+                "AT-V07-14316-C-WIE",
+                "SPRING CHILD L"
+            ],
+            [
+                "AT-V07-14319-B-WIE",
+                "PIN CHILD"
+            ]
+        ]
+    ],
+    "AT-V07-14342-A-SUB": [
+        "Lever Child L sub (long type)",
+        [
+            [
+                "AT-V07-14342-A-WIE",
+                "LEVER CHILD LONG TYPE L"
+            ],
+            [
+                "AT-V07-14316-C-WIE",
+                "SPRING CHILD L"
+            ],
+            [
+                "AT-V07-14319-B-WIE",
+                "PIN CHILD"
+            ]
+        ]
+    ],
+    "AT-T61-11313-A-SUB": [
+        "Access Key R sub",
+        [
+            [
+                "AT-T61-11313-C-TIE",
+                "ACCESS KEY R"
+            ],
+            [
+                "AT-D93-11349-A-TIE",
+                "X-RING"
+            ]
+        ]
+    ],
+    "AT-V07-11315-A-SUB": [
+        "COVER PLATE SUB R",
+        [
+            [
+                "AT-V07-11315-E-WIE",
+                "COVER PLATE R"
+            ],
+            [
+                "AT-V07-11319-B-WIE",
+                "SHAFT LATCH"
+            ]
+        ]
+    ],
+    "AT-V07-11316-A-SUB": [
+        "COVER PLATE SUB L",
+        [
+            [
+                "AT-V07-11316-E-WIE",
+                "COVER PLATE L"
+            ],
+            [
+                "AT-V07-11319-B-WIE",
+                "SHAFT LATCH"
+            ]
+        ]
+    ],
+    "AT-V80-11315-A-SUB": [
+        "COVER PLATE SUB R XDD",
+        [
+            [
+                "AT-V80-11315-B-WIE",
+                "COVER PLATE (ZnNi) R"
+            ],
+            [
+                "AT-V80-11319-B-WIE",
+                "SHAFT LATCH (ZnNi)"
+            ],
+            [
+                "AT-V07-11319-B-WIE",
+                "SHAFT LATCH"
+            ]
+        ]
+    ],
+    "AT-V80-11319-A-SUB": [
+        "COVER PLATE SUB L XDD",
+        [
+            [
+                "AT-V80-11319-B-WIE",
+                "SHAFT LATCH (ZnNi)"
+            ],
+            [
+                "AT-V07-11319-B-WIE",
+                "SHAFT LATCH"
+            ]
+        ]
+    ],
+    "AT-V07-31351-A-SUB": [
+        "Motor Terminal NL R",
+        [
+            [
+                "AT-W22-31311-B-WIE",
+                "MOTOR"
+            ],
+            [
+                "AT-V07-31351-C-WIE",
+                "MOTOR TERMINAL R"
+            ],
+            [
+                "AT-V07-31311-A-WIE",
+                "WORM"
+            ]
+        ]
+    ],
+    "AT-V07-31352-A-SUB": [
+        "Motor Terminal NL L",
+        [
+            [
+                "AT-W22-31311-B-WIE",
+                "MOTOR"
+            ],
+            [
+                "AT-V07-31352-C-WIE",
+                "MOTOR TERMINAL L"
+            ],
+            [
+                "AT-V07-31311-A-WIE",
+                "WORM"
+            ]
+        ]
+    ],
+    "AT-V90-12323-A-SUB": [
+        "Sub Assy Motor SL R",
+        [
+            [
+                "AT-W22-31311-B-WIE",
+                "MOTOR"
+            ],
+            [
+                "AT-W22-31312-B-WIE",
+                "MOTOR"
+            ],
+            [
+                "AT-V90-12323-B-WIE",
+                "MOTOR TERMINAL SL 3P R"
+            ],
+            [
+                "AT-V07-31311-A-WIE",
+                "WORM"
+            ]
+        ]
+    ],
+    "AT-V90-12328-A-SUB": [
+        "Sub Assy Motor SL L",
+        [
+            [
+                "AT-W22-31311-B-WIE",
+                "MOTOR"
+            ],
+            [
+                "AT-W22-31312-B-WIE",
+                "MOTOR"
+            ],
+            [
+                "AT-V90-12328-A-WIE",
+                "MOTOR TERMINAL SL-A L"
+            ],
+            [
+                "AT-V90-12332-A-WIE",
+                "MOTOR TERMINAL SL-B L"
+            ],
+            [
+                "AT-V07-31311-A-WIE",
+                "WORM"
+            ]
+        ]
+    ],
+    "AT-E71-12331-A-SUB": [
+        "HOLDER-ROD RH",
+        [
+            [
+                "AT-E71-12331-A-WIE",
+                "HOLDER-ROD RH"
+            ],
+            [
+                "AT-E71-31355-C-WIE",
+                "KEY LEVER B"
+            ]
+        ]
+    ],
+    "AT-E71-12332-A-SUB": [
+        "HOLDER-ROD LH",
+        [
+            [
+                "AT-E71-12332-A-WIE",
+                "HOLDER-ROD LH"
+            ],
+            [
+                "AT-E71-31355-C-WIE",
+                "KEY LEVER B"
+            ]
+        ]
+    ],
+    "AT-YA3-11332-E-SUB": [
+        "LEVER IH SUB L",
+        [
+            [
+                "AT-YA3-11332-E-TIE",
+                "LEVER IH OR L"
+            ],
+            [
+                "AT-000-00265-F-TIE",
+                "SNAP L"
+            ]
+        ]
+    ],
+    "AT-YA3-11331-E-SUB": [
+        "LEVER IH SUB R",
+        [
+            [
+                "AT-YA3-11331-E-TIE",
+                "LEVER IH OR R"
+            ],
+            [
+                "AT-000-00264-F-TIE",
+                "SNAP R"
+            ]
+        ]
+    ],
+    "AT-YA3-11314-K-SUB": [
+        "BODY SUB L",
+        [
+            [
+                "AT-YA3-11376-A-WIE",
+                "CATCH BUMPER L"
+            ],
+            [
+                "AT-YA3-11314-H-TIE",
+                "BODY L"
+            ],
+            [
+                "AT-V07-11324-E-WIE",
+                "BUMPER RUBBER L"
+            ],
+            [
+                "AT-L88-11319-E-TIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ],
+    "AT-YA3-11316-K-SUB": [
+        "BODY SUB (EMERGENCY) L",
+        [
+            [
+                "AT-YA3-11376-A-WIE",
+                "CATCH BUMPER L"
+            ],
+            [
+                "AT-YA3-11316-K-TIE",
+                "BODY(EMERGENCY) L"
+            ],
+            [
+                "AT-V07-11324-E-WIE",
+                "BUMPER RUBBER L"
+            ],
+            [
+                "AT-L88-11319-E-TIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ],
+    "AT-YA3-11315-K-SUB": [
+        "BODY SUB (EMERGENCY) R",
+        [
+            [
+                "AT-YA3-11375-A-WIE",
+                "CATCH BUMPER R"
+            ],
+            [
+                "AT-YA3-11315-K-TIE",
+                "BODY(EMERGENCY) R"
+            ],
+            [
+                "AT-V07-11323-E-WIE",
+                "BUMPER RUBBER R"
+            ],
+            [
+                "AT-L88-11319-E-TIE",
+                "STOPPER RUBBER"
+            ]
+        ]
+    ]
+}
