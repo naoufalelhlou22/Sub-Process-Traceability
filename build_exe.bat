@@ -16,11 +16,11 @@ echo Compiling... This may take a minute or two...
 echo.
 
 :: Run PyInstaller
-python3-64.exe -m PyInstaller --noconsole --onefile --add-data "assets;assets" --icon="assets/logo_en.png" --version-file=file_version_info.txt traceability_v3.py
+python3-64.exe -m PyInstaller --noconsole --onefile --add-data "assets;assets" --icon="assets/logo_en.png" --version-file=file_version_info.txt "Sub-Process Traceability.py"
 
 echo.
 echo ========================================================
 echo Build Complete!
-echo You can find your traceability_v3.exe in the 'dist' folder.
+echo You can find your Sub-Process Traceability.exe in the 'dist' folder.
 echo ========================================================
 pause
