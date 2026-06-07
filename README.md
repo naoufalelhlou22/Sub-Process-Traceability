@@ -1,8 +1,8 @@
-# HI-LEX ACT - Sub-Process Traceability 🏭
+# HI-LEX ACT - Sub-Process Traceability
 
 A modern, industrial-grade desktop application built with Python and Tkinter, designed for tracking and managing sub-process manufacturing data, printing Zebra ZPL labels, and generating comprehensive Excel reports.
 
-## ✨ Features
+## Features
 
 - **Modern UI/UX**: Dark mode industrial aesthetic with smooth interactions and responsive tables.
 - **Traceability Management**: Track raw materials, batch numbers, shifts, and operators seamlessly.
@@ -12,11 +12,11 @@ A modern, industrial-grade desktop application built with Python and Tkinter, de
 - **Smart Validation**: Mandatory batch number checks and empty-field mitigation for clean Excel outputs.
 - **Pagination/Reset UI**: Automatically resets the live view every 10 records for a clean workspace while keeping data safe in the database.
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 Make sure you have Python 3.8+ installed on your system.
 
-## 📦 Installation & Setup
+## Installation & Setup
 
 1. **Clone or Download the Project** to your local machine.
 2. **Install Dependencies**:
@@ -25,21 +25,22 @@ Make sure you have Python 3.8+ installed on your system.
    pip install -r requirements.txt
    ```
 
-## 🚀 How to Run
+## How to Run
 
 To run the application in development mode:
+
 ```bash
 python traceability_v3.py
 ```
 
-## 🖨️ Zebra Printer Configuration
+## Zebra Printer Configuration
 
 1. Connect your Zebra printer via USB or Network.
 2. Click the **"Settings (⛭)"** button in the top right corner of the application.
 3. Select your designated Zebra printer from the dropdown list.
-4. Click **Save Settings**. 
+4. Click **Save Settings**.
 
-## 📦 Compiling to Standalone Executable (.exe)
+## Compiling to Standalone Executable (.exe)
 
 If you wish to deploy the application on Windows without needing Python installed, you can compile it into a single `.exe` file.
 
@@ -50,7 +51,7 @@ If you wish to deploy the application on Windows without needing Python installe
 
 *Note: The compilation script automatically embeds the `assets` directory (images/logos) directly into the executable.*
 
-## 📂 Project Structure
+## Project Structure
 
 - `traceability_v3.py` : Main application source code.
 - `requirements.txt` : List of Python dependencies.
