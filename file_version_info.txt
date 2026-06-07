@@ -18,7 +18,7 @@ VSVersionInfo(
         StringStruct('FileDescription', 'Sub-Process Traceability'),
         StringStruct('FileVersion', '1.0.0.0'),
         StringStruct('InternalName', 'traceability_v3'),
-        StringStruct('LegalCopyright', 'Copyright (c) 2026 HI-LEX ACT. Developed by Naoufal El Hlou'),
+        StringStruct('LegalCopyright', 'HI-LEX ACT . Naoufal El Hlou'),
         StringStruct('OriginalFilename', 'traceability_v3.exe'),
         StringStruct('ProductName', 'Sub-Process Traceability App'),
         StringStruct('ProductVersion', '1.0.0.0')])
