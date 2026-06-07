@@ -31,6 +31,7 @@ except ImportError:
     WIN32_PRINT_AVAILABLE = False
 
 CONFIG_FILE = "traceability_config.json"
+APP_VERSION = "1.0.0"
 # Premium Industrial HMI Theme
 
 BG_COLOR = "#0F1419"       # Main Background
@@ -393,7 +394,7 @@ def print_html_slip(record_data):
 class TraceabilityApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("HI-LEX ACT - Sub-Process Traceability")
+        self.title(f"HI-LEX ACT - Sub-Process Traceability v{APP_VERSION}")
         self.geometry("1280x800")
         try:
             taskbar_logo = resource_path(os.path.join("assets", "taskbar_logo.png"))
@@ -577,6 +578,8 @@ class TraceabilityApp(tk.Tk):
         
         self.settings_btn = ttk.Button(self.header_frame, text="⛭ Settings", style="Header.TButton", command=self.open_settings)
         self.settings_btn.pack(side=tk.RIGHT, padx=20)
+        
+        #tk.Label(self.header_frame, text="Developed by Naoufal El Hlou", bg=HEADER_BG, fg="#94A3B8", font=("Segoe UI", 9, "italic")).pack(side=tk.RIGHT, padx=10)
         
         try:
             settings_path = resource_path(os.path.join("assets", "settings_icon.png"))

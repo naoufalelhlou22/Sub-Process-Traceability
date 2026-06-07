@@ -60,3 +60,6 @@ If you wish to deploy the application on Windows without needing Python installe
 - `traceability_config.json` : Automatically generated configuration file saving user printer preferences.
 - `traceability_v3.db` : Automatically generated SQLite database for persistent records.
 - `traceability_data.xlsx` : Automatically generated output reports.
+
+---
+**Developed by Naoufal El Hlou**
