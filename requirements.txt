@@ -1,0 +1,8 @@
+qrcode
+opencv-python
+numpy
+tkcalendar
+openpyxl
+Pillow
+pywin32
+pyinstaller
