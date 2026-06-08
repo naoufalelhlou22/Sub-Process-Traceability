@@ -24,12 +24,10 @@ imports:
  &#8226;   <a href="#_collections_abc">_collections_abc</a>
  &#8226;   <a href="#_weakrefset">_weakrefset</a>
  &#8226;   <a href="#abc">abc</a>
- &#8226;   <a href="#base64">base64</a>
  &#8226;   <a href="#codecs">codecs</a>
  &#8226;   <a href="#collections">collections</a>
  &#8226;   <a href="#copyreg">copyreg</a>
  &#8226;   <a href="#ctypes">ctypes</a>
- &#8226;   <a href="#cv2">cv2</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#encodings">encodings</a>
  &#8226;   <a href="#encodings._win_cp_codecs">encodings._win_cp_codecs</a>
@@ -167,7 +165,6 @@ imports:
  &#8226;   <a href="#matplotlib.backends.backend_tkagg">matplotlib.backends.backend_tkagg</a>
  &#8226;   <a href="#matplotlib.figure">matplotlib.figure</a>
  &#8226;   <a href="#ntpath">ntpath</a>
- &#8226;   <a href="#numpy">numpy</a>
  &#8226;   <a href="#openpyxl">openpyxl</a>
  &#8226;   <a href="#openpyxl.styles">openpyxl.styles</a>
  &#8226;   <a href="#operator">operator</a>
@@ -192,7 +189,7 @@ imports:
  &#8226;   <a href="#sre_parse">sre_parse</a>
  &#8226;   <a href="#stat">stat</a>
  &#8226;   <a href="#sys">sys</a>
- &#8226;   <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#threading">threading</a>
  &#8226;   <a href="#tkcalendar">tkcalendar</a>
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
@@ -5893,7 +5890,6 @@ imported by:
  &#8226;   <a href="#email.encoders">email.encoders</a>
  &#8226;   <a href="#encodings.base64_codec">encodings.base64_codec</a>
  &#8226;   <a href="#http.server">http.server</a>
- &#8226;   <a href="#main.py">main.py</a>
  &#8226;   <a href="#matplotlib.colors">matplotlib.colors</a>
  &#8226;   <a href="#matplotlib.font_manager">matplotlib.font_manager</a>
  &#8226;   <a href="#multiprocessing.resource_tracker">multiprocessing.resource_tracker</a>
@@ -6340,7 +6336,6 @@ imported by:
  &#8226;   <a href="#babel.localedata">babel.localedata</a>
  &#8226;   <a href="#concurrent.futures._base">concurrent.futures._base</a>
  &#8226;   <a href="#contextlib">contextlib</a>
- &#8226;   <a href="#cv2.utils">cv2.utils</a>
  &#8226;   <a href="#dateutil.tz._factories">dateutil.tz._factories</a>
  &#8226;   <a href="#dateutil.tz.tz">dateutil.tz.tz</a>
  &#8226;   <a href="#difflib">difflib</a>
@@ -7072,7 +7067,6 @@ imported by:
  &#8226;   <a href="#_sre">_sre</a>
  &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#collections">collections</a>
- &#8226;   <a href="#cv2">cv2</a>
  &#8226;   <a href="#cycler">cycler</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#email.generator">email.generator</a>
@@ -7369,315 +7363,6 @@ imported by:
  &#8226;   <a href="#ctypes">ctypes</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
  &#8226;   <a href="#dateutil.tz.win">dateutil.tz.win</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/__init__.py" type="text/plain"><tt>cv2</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#copy">copy</a>
- &#8226;   <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.config">cv2.config</a>
- &#8226;   <a href="#cv2.config-3">cv2.config-3</a>
- &#8226;   <a href="#cv2.cv2">cv2.cv2</a>
- &#8226;   <a href="#cv2.data">cv2.data</a>
- &#8226;   <a href="#cv2.gapi">cv2.gapi</a>
- &#8226;   <a href="#cv2.load_config_py3">cv2.load_config_py3</a>
- &#8226;   <a href="#cv2.mat_wrapper">cv2.mat_wrapper</a>
- &#8226;   <a href="#cv2.misc">cv2.misc</a>
- &#8226;   <a href="#cv2.misc.version">cv2.misc.version</a>
- &#8226;   <a href="#cv2.typing">cv2.typing</a>
- &#8226;   <a href="#cv2.utils">cv2.utils</a>
- &#8226;   <a href="#cv2.version">cv2.version</a>
- &#8226;   <a href="#importlib">importlib</a>
- &#8226;   <a href="#numpy">numpy</a>
- &#8226;   <a href="#numpy.core.multiarray">numpy.core.multiarray</a>
- &#8226;   <a href="#os">os</a>
- &#8226;   <a href="#platform">platform</a>
- &#8226;   <a href="#sys">sys</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.config">cv2.config</a>
- &#8226;   <a href="#cv2.config-3">cv2.config-3</a>
- &#8226;   <a href="#cv2.cv2">cv2.cv2</a>
- &#8226;   <a href="#cv2.data">cv2.data</a>
- &#8226;   <a href="#cv2.dnn">cv2.dnn</a>
- &#8226;   <a href="#cv2.gapi">cv2.gapi</a>
- &#8226;   <a href="#cv2.load_config_py3">cv2.load_config_py3</a>
- &#8226;   <a href="#cv2.mat_wrapper">cv2.mat_wrapper</a>
- &#8226;   <a href="#cv2.misc">cv2.misc</a>
- &#8226;   <a href="#cv2.misc.version">cv2.misc.version</a>
- &#8226;   <a href="#cv2.typing">cv2.typing</a>
- &#8226;   <a href="#cv2.utils">cv2.utils</a>
- &#8226;   <a href="#cv2.version">cv2.version</a>
- &#8226;   <a href="#main.py">main.py</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.config"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/config.py" type="text/plain"><tt>cv2.config</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#os">os</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.config-3"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/config-3.py" type="text/plain"><tt>cv2.config-3</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.version">cv2.version</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.cv2"></a>
-  <tt>cv2.cv2</tt> <span class="moduletype"><tt>C:\Users\Mr_X\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\cv2\cv2.pyd</tt></span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.data"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/data/__init__.py" type="text/plain"><tt>cv2.data</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#os">os</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.dnn"></a>
-  <a target="code" href="-" type="text/plain"><tt>cv2.dnn</tt></a>
-<span class="moduletype">NamespacePackage</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2.typing">cv2.typing</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.gapi"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/gapi/__init__.py" type="text/plain"><tt>cv2.gapi</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#sys">sys</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.gapi.wip">cv2.gapi.wip</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.gapi.wip"></a>
-  <a target="code" href="-" type="text/plain"><tt>cv2.gapi.wip</tt></a>
-<span class="moduletype">NamespacePackage</span>  <div class="import">
-imports:
-    <a href="#cv2.gapi">cv2.gapi</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2.gapi.wip.draw">cv2.gapi.wip.draw</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.gapi.wip.draw"></a>
-  <a target="code" href="-" type="text/plain"><tt>cv2.gapi.wip.draw</tt></a>
-<span class="moduletype">NamespacePackage</span>  <div class="import">
-imports:
-    <a href="#cv2.gapi.wip">cv2.gapi.wip</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2.typing">cv2.typing</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.load_config_py3"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/load_config_py3.py" type="text/plain"><tt>cv2.load_config_py3</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#os">os</a>
- &#8226;   <a href="#sys">sys</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.mat_wrapper"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/mat_wrapper/__init__.py" type="text/plain"><tt>cv2.mat_wrapper</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#numpy">numpy</a>
- &#8226;   <a href="#typing">typing</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.typing">cv2.typing</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.misc"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/misc/__init__.py" type="text/plain"><tt>cv2.misc</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.misc.version">cv2.misc.version</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.misc.version">cv2.misc.version</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.misc.version"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/misc/version.py" type="text/plain"><tt>cv2.misc.version</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.misc">cv2.misc</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.misc">cv2.misc</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.typing"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/typing/__init__.py" type="text/plain"><tt>cv2.typing</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.dnn">cv2.dnn</a>
- &#8226;   <a href="#cv2.gapi.wip.draw">cv2.gapi.wip.draw</a>
- &#8226;   <a href="#cv2.mat_wrapper">cv2.mat_wrapper</a>
- &#8226;   <a href="#numpy">numpy</a>
- &#8226;   <a href="#typing">typing</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.utils"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/utils/__init__.py" type="text/plain"><tt>cv2.utils</tt></a>
-<span class="moduletype">Package</span>  <div class="import">
-imports:
-    <a href="#collections">collections</a>
- &#8226;   <a href="#cv2">cv2</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="cv2.version"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/cv2/version.py" type="text/plain"><tt>cv2.version</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#cv2">cv2</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.config-3">cv2.config-3</a>
 
   </div>
 
@@ -12121,8 +11806,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#dateutil">dateutil</a>
+    <a href="#dateutil">dateutil</a>
  &#8226;   <a href="#importlib">importlib</a>
  &#8226;   <a href="#importlib._abc">importlib._abc</a>
  &#8226;   <a href="#importlib._bootstrap">importlib._bootstrap</a>
@@ -18125,10 +17809,6 @@ imported by:
  &#8226;   <a href="#contourpy.convert">contourpy.convert</a>
  &#8226;   <a href="#contourpy.typecheck">contourpy.typecheck</a>
  &#8226;   <a href="#contourpy.types">contourpy.types</a>
- &#8226;   <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.mat_wrapper">cv2.mat_wrapper</a>
- &#8226;   <a href="#cv2.typing">cv2.typing</a>
- &#8226;   <a href="#main.py">main.py</a>
  &#8226;   <a href="#matplotlib._cm">matplotlib._cm</a>
  &#8226;   <a href="#matplotlib._cm_bivar">matplotlib._cm_bivar</a>
  &#8226;   <a href="#matplotlib._constrained_layout">matplotlib._constrained_layout</a>
@@ -18604,7 +18284,6 @@ imported by:
  &#8226;   <a href="#numpy._core.strings">numpy._core.strings</a>
  &#8226;   <a href="#numpy._core.umath">numpy._core.umath</a>
  &#8226;   <a href="#numpy.core">numpy.core</a>
- &#8226;   <a href="#numpy.core.multiarray">numpy.core.multiarray</a>
  &#8226;   <a href="#numpy.fft._helper">numpy.fft._helper</a>
  &#8226;   <a href="#numpy.fft._pocketfft">numpy.fft._pocketfft</a>
  &#8226;   <a href="#numpy.lib._array_utils_impl">numpy.lib._array_utils_impl</a>
@@ -20646,7 +20325,6 @@ imported by:
  &#8226;   <a href="#numpy._core.shape_base">numpy._core.shape_base</a>
  &#8226;   <a href="#numpy._core.strings">numpy._core.strings</a>
  &#8226;   <a href="#numpy._typing._array_like">numpy._typing._array_like</a>
- &#8226;   <a href="#numpy.core.multiarray">numpy.core.multiarray</a>
  &#8226;   <a href="#numpy.ctypeslib._ctypeslib">numpy.ctypeslib._ctypeslib</a>
  &#8226;   <a href="#numpy.lib._function_base_impl">numpy.lib._function_base_impl</a>
  &#8226;   <a href="#numpy.lib._index_tricks_impl">numpy.lib._index_tricks_impl</a>
@@ -22113,7 +21791,6 @@ imports:
 imported by:
     <a href="#numpy">numpy</a>
  &#8226;   <a href="#numpy.core._utils">numpy.core._utils</a>
- &#8226;   <a href="#numpy.core.multiarray">numpy.core.multiarray</a>
 
   </div>
 
@@ -22131,26 +21808,6 @@ imports:
   <div class="import">
 imported by:
     <a href="#numpy.core">numpy.core</a>
- &#8226;   <a href="#numpy.core.multiarray">numpy.core.multiarray</a>
-
-  </div>
-
-</div>
-
-<div class="node">
-  <a name="numpy.core.multiarray"></a>
-  <a target="code" href="///C:/Users/Mr_X/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/numpy/core/multiarray.py" type="text/plain"><tt>numpy.core.multiarray</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#numpy._core">numpy._core</a>
- &#8226;   <a href="#numpy._core.multiarray">numpy._core.multiarray</a>
- &#8226;   <a href="#numpy.core">numpy.core</a>
- &#8226;   <a href="#numpy.core._utils">numpy.core._utils</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#cv2">cv2</a>
 
   </div>
 
@@ -29562,10 +29219,6 @@ imported by:
  &#8226;   <a href="#ctypes._aix">ctypes._aix</a>
  &#8226;   <a href="#ctypes.macholib.dyld">ctypes.macholib.dyld</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
- &#8226;   <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.config">cv2.config</a>
- &#8226;   <a href="#cv2.data">cv2.data</a>
- &#8226;   <a href="#cv2.load_config_py3">cv2.load_config_py3</a>
  &#8226;   <a href="#dateutil.tz.tz">dateutil.tz.tz</a>
  &#8226;   <a href="#doctest">doctest</a>
  &#8226;   <a href="#email.utils">email.utils</a>
@@ -29982,8 +29635,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#cv2">cv2</a>
- &#8226;   <a href="#numpy.f2py.crackfortran">numpy.f2py.crackfortran</a>
+    <a href="#numpy.f2py.crackfortran">numpy.f2py.crackfortran</a>
  &#8226;   <a href="#numpy.lib._utils_impl">numpy.lib._utils_impl</a>
  &#8226;   <a href="#numpy.testing._private.utils">numpy.testing._private.utils</a>
  &#8226;   <a href="#pydoc">pydoc</a>
@@ -32284,9 +31936,6 @@ imported by:
  &#8226;   <a href="#ctypes._endian">ctypes._endian</a>
  &#8226;   <a href="#ctypes._layout">ctypes._layout</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
- &#8226;   <a href="#cv2">cv2</a>
- &#8226;   <a href="#cv2.gapi">cv2.gapi</a>
- &#8226;   <a href="#cv2.load_config_py3">cv2.load_config_py3</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#dateutil">dateutil</a>
  &#8226;   <a href="#dateutil.rrule">dateutil.rrule</a>
@@ -32546,7 +32195,6 @@ imported by:
  &#8226;   <a href="#_pyrepl.pager">_pyrepl.pager</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
  &#8226;   <a href="#importlib.resources._common">importlib.resources._common</a>
- &#8226;   <a href="#main.py">main.py</a>
  &#8226;   <a href="#matplotlib">matplotlib</a>
  &#8226;   <a href="#matplotlib.texmanager">matplotlib.texmanager</a>
  &#8226;   <a href="#multiprocessing.heap">multiprocessing.heap</a>
@@ -32645,6 +32293,7 @@ imported by:
  &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#importlib.util">importlib.util</a>
  &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#main.py">main.py</a>
  &#8226;   <a href="#matplotlib.backends.backend_webagg">matplotlib.backends.backend_webagg</a>
  &#8226;   <a href="#matplotlib.figure">matplotlib.figure</a>
  &#8226;   <a href="#matplotlib.font_manager">matplotlib.font_manager</a>
@@ -33397,8 +33046,6 @@ imported by:
  &#8226;   <a href="#contourpy.dechunk">contourpy.dechunk</a>
  &#8226;   <a href="#contourpy.typecheck">contourpy.typecheck</a>
  &#8226;   <a href="#copyreg">copyreg</a>
- &#8226;   <a href="#cv2.mat_wrapper">cv2.mat_wrapper</a>
- &#8226;   <a href="#cv2.typing">cv2.typing</a>
  &#8226;   <a href="#cycler">cycler</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
  &#8226;   <a href="#functools">functools</a>
