@@ -4,16 +4,12 @@ import sqlite3
 import datetime
 import os
 import webbrowser
-import tempfile
 import json
-import base64
-import io
 import qrcode
-import cv2
-import numpy as np
 from tkcalendar import DateEntry
 from openpyxl import Workbook, load_workbook
 import sys
+import threading
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 def resource_path(relative_path):
@@ -94,36 +90,26 @@ HMI_FONT_XS = ("Segoe UI", 9)
 
 # Default Hardcoded Data (Fallback)
 SF_DATA_DEFAULT = {
-    "AT-V07-11313-A-SUB": ("SUB BODY N R", [("AT-V07-11313-P-WIE", "BODY R"), ("AT-V07-11323-E-WIE", "BUMPER RUBBER R")]),
-    "AT-V07-11213-A-SUB": ("SUB BODY EMG R", [("AT-V07-11213-E-WIE", "BODY(EMERGENCY) R"), ("AT-V07-11323-E-WIE", "BUMPER RUBBER R")]),
-    "AT-V07-11314-A-SUB": ("SUB BODY N L", [("AT-V07-11314-M-WIE", "BODY L"), ("AT-V07-11324-E-WIE", "BUMPER RUBBER L")]),
-    "AT-V07-11214-A-SUB": ("SUB BODY EMG L", [("AT-V07-11214-E-WIE", "BODY(EMERGENCY) L"), ("AT-V07-11324-E-WIE", "BUMPER RUBBER L")]),
-    "AT-V80-11213-A-SUB": ("SUB BODY EMG R XDD", [("AT-V07-11213-E-WIE", "BODY(EMERGENCY) R"), ("AT-V07-11223-E-WIE", "CATCH BUMPER R"), ("AT-V07-11323-E-WIE", "BUMPER RUBBER R")]),
-    "AT-V80-11314-A-SUB": ("SUB BODY N L XDD", [("AT-V07-11314-M-WIE", "BODY L"), ("AT-V07-11224-E-WIE", "CATCH BUMPER L"), ("AT-V07-11324-E-WIE", "BUMPER RUBBER L")]),
-    "AT-V07-11311-A-SUB": ("Back plate R sub", [("AT-V07-11311-J-WIE", "BACK PLATE R"), ("AT-V07-11359-B-WIE", "STOPPER RUBBER")]),
-    "AT-V07-11312-A-SUB": ("Back plate L sub", [("AT-V07-11312-J-WIE", "BACK PLATE L"), ("AT-V07-11359-B-WIE", "STOPPER RUBBER")]),
-    "AT-V80-11311-A-SUB": ("Back plate R sub XDD", [("AT-V80-11311-C-WIE", "BACK PLATE (ZnNi) R"), ("AT-V07-11359-B-WIE", "STOPPER RUBBER")]),
-    "AT-V80-11312-A-SUB": ("Back plate L sub XDD", [("AT-V80-11312-C-WIE", "BACK PLATE (ZnNi) L"), ("AT-V07-11359-B-WIE", "STOPPER RUBBER")]),
-    "AT-V07-14311-A-SUB": ("Lever Child R sub (short type)", [("AT-V07-14311-F-WIE", "LEVER CHILD R"), ("AT-V07-14315-C-WIE", "SPRING CHILD R"), ("AT-V07-14319-B-WIE", "PIN CHILD")]),
-    "AT-V07-14341-A-SUB": ("Lever Child R sub (long type)", [("AT-V07-14341-A-WIE", "LEVER CHILD LONG TYPE R"), ("AT-V07-14315-C-WIE", "SPRING CHILD R"), ("AT-V07-14319-B-WIE", "PIN CHILD")]),
-    "AT-V07-14312-A-SUB": ("Lever Child L sub (short type)", [("AT-V07-14312-F-WIE", "LEVER CHILD L"), ("AT-V07-14316-C-WIE", "SPRING CHILD L"), ("AT-V07-14319-B-WIE", "PIN CHILD")]),
-    "AT-V07-14342-A-SUB": ("Lever Child L sub (long type)", [("AT-V07-14342-A-WIE", "LEVER CHILD LONG TYPE L"), ("AT-V07-14316-C-WIE", "SPRING CHILD L"), ("AT-V07-14319-B-WIE", "PIN CHILD")]),
-    "AT-T61-11313-A-SUB": ("Access Key R sub", [("AT-T61-11313-C-TIE", "ACCESS KEY R"), ("AT-D93-11349-A-TIE", "X-RING")]),
-    "AT-V07-11315-A-SUB": ("COVER PLATE SUB R", [("AT-V07-11315-E-WIE", "COVER PLATE R"), ("AT-V07-11319-B-WIE", "SHAFT LATCH")]),
-    "AT-V07-11316-A-SUB": ("COVER PLATE SUB L", [("AT-V07-11316-E-WIE", "COVER PLATE L"), ("AT-V07-11319-B-WIE", "SHAFT LATCH")]),
-    "AT-V80-11315-A-SUB": ("COVER PLATE SUB R XDD", [("AT-V80-11315-B-WIE", "COVER PLATE (ZnNi) R"), ("AT-V80-11319-B-WIE", "SHAFT LATCH (ZnNi)"), ("AT-V07-11319-B-WIE", "SHAFT LATCH")]),
-    "AT-V80-11319-A-SUB": ("COVER PLATE SUB L XDD", [("AT-V80-11319-B-WIE", "SHAFT LATCH (ZnNi)"), ("AT-V07-11319-B-WIE", "SHAFT LATCH")]),
-    "AT-V07-31351-A-SUB": ("Motor Terminal NL R", [("AT-W22-31311-B-WIE", "MOTOR"), ("AT-V07-31351-C-WIE", "MOTOR TERMINAL R"), ("AT-V07-31311-A-WIE", "WORM")]),
-    "AT-V07-31352-A-SUB": ("Motor Terminal NL L", [("AT-W22-31311-B-WIE", "MOTOR"), ("AT-V07-31352-C-WIE", "MOTOR TERMINAL L"), ("AT-V07-31311-A-WIE", "WORM")]),
-    "AT-V90-12323-A-SUB": ("Sub Assy Motor SL R", [("AT-W22-31311-B-WIE", "MOTOR"), ("AT-W22-31312-B-WIE", "MOTOR"), ("AT-V90-12323-B-WIE", "MOTOR TERMINAL SL 3P R"), ("AT-V07-31311-A-WIE", "WORM")]),
-    "AT-V90-12328-A-SUB": ("Sub Assy Motor SL L", [("AT-W22-31311-B-WIE", "MOTOR"), ("AT-W22-31312-B-WIE", "MOTOR"), ("AT-V90-12328-A-WIE", "MOTOR TERMINAL SL-A L"), ("AT-V90-12332-A-WIE", "MOTOR TERMINAL SL-B L"), ("AT-V07-31311-A-WIE", "WORM")]),
-    "AT-E71-12331-A-SUB": ("HOLDER-ROD RH", [("AT-E71-12331-A-WIE", "HOLDER-ROD RH"), ("AT-E71-31355-C-WIE", "KEY LEVER B")]),
-    "AT-E71-12332-A-SUB": ("HOLDER-ROD LH", [("AT-E71-12332-A-WIE", "HOLDER-ROD LH"), ("AT-E71-31355-C-WIE", "KEY LEVER B")]),
-    "AT-YA3-11332-E-SUB": ("LEVER IH SUB L", [("AT-YA3-11332-E-TIE", "LEVER IH OR L"), ("AT-000-00265-F-TIE", "SNAP L")]),
-    "AT-YA3-11331-E-SUB": ("LEVER IH SUB R", [("AT-YA3-11331-E-TIE", "LEVER IH OR R"), ("AT-000-00264-F-TIE", "SNAP R")]),
-    "AT-YA3-11314-K-SUB": ("BODY SUB L", [("AT-YA3-11376-A-WIE", "CATCH BUMPER L"), ("AT-YA3-11314-H-TIE", "BODY L"), ("AT-V07-11324-E-WIE", "BUMPER RUBBER L"), ("AT-L88-11319-E-TIE", "STOPPER RUBBER")]),
-    "AT-YA3-11316-K-SUB": ("BODY SUB (EMERGENCY) L", [("AT-YA3-11376-A-WIE", "CATCH BUMPER L"), ("AT-YA3-11316-K-TIE", "BODY(EMERGENCY) L"), ("AT-V07-11324-E-WIE", "BUMPER RUBBER L"), ("AT-L88-11319-E-TIE", "STOPPER RUBBER")]),
-    "AT-YA3-11315-K-SUB": ("BODY SUB (EMERGENCY) R", [("AT-YA3-11375-A-WIE", "CATCH BUMPER R"), ("AT-YA3-11315-K-TIE", "BODY(EMERGENCY) R"), ("AT-V07-11323-E-WIE", "BUMPER RUBBER R"), ("AT-L88-11319-E-TIE", "STOPPER RUBBER")])
+    "MOCK-A01-10001-X-SUB": ("Alpha Subsystem Right", [("MOCK-A01-10001-Y-PRT", "Alpha Core Right"), ("MOCK-A01-10002-Z-PRT", "Alpha Buffer Right")]),
+    "MOCK-A01-10003-X-SUB": ("Alpha Subsystem Aux Right", [("MOCK-A01-10003-Y-PRT", "Alpha Core (Auxiliary) Right"), ("MOCK-A01-10002-Z-PRT", "Alpha Buffer Right")]),
+    "MOCK-A01-10004-X-SUB": ("Alpha Subsystem Left", [("MOCK-A01-10004-Y-PRT", "Alpha Core Left"), ("MOCK-A01-10005-Z-PRT", "Alpha Buffer Left")]),
+    "MOCK-A01-10006-X-SUB": ("Alpha Subsystem Aux Left", [("MOCK-A01-10006-Y-PRT", "Alpha Core (Auxiliary) Left"), ("MOCK-A01-10005-Z-PRT", "Alpha Buffer Left")]),
+    "MOCK-B02-20001-X-SUB": ("Beta Panel Right Sub", [("MOCK-B02-20001-Y-PRT", "Beta Panel Right"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
+    "MOCK-B02-20003-X-SUB": ("Beta Panel Left Sub", [("MOCK-B02-20003-Y-PRT", "Beta Panel Left"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
+    "MOCK-B02-20004-X-SUB": ("Beta Panel Right Sub V2", [("MOCK-B02-20004-Y-PRT", "Beta Panel (Upgraded) Right"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
+    "MOCK-B02-20005-X-SUB": ("Beta Panel Left Sub V2", [("MOCK-B02-20005-Y-PRT", "Beta Panel (Upgraded) Left"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
+    "MOCK-C03-30001-X-SUB": ("Gamma Switch Right Sub (Short)", [("MOCK-C03-30001-Y-PRT", "Gamma Switch Right"), ("MOCK-C03-30002-Z-PRT", "Gamma Coil Right"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
+    "MOCK-C03-30004-X-SUB": ("Gamma Switch Left Sub (Short)", [("MOCK-C03-30004-Y-PRT", "Gamma Switch Left"), ("MOCK-C03-30005-Z-PRT", "Gamma Coil Left"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
+    "MOCK-C03-30006-X-SUB": ("Gamma Switch Right Sub (Long)", [("MOCK-C03-30006-Y-PRT", "Gamma Switch Long Right"), ("MOCK-C03-30002-Z-PRT", "Gamma Coil Right"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
+    "MOCK-C03-30007-X-SUB": ("Gamma Switch Left Sub (Long)", [("MOCK-C03-30007-Y-PRT", "Gamma Switch Long Left"), ("MOCK-C03-30005-Z-PRT", "Gamma Coil Left"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
+    "MOCK-D04-40001-X-SUB": ("Delta Processor Node Right", [("MOCK-D04-40001-Y-PRT", "Delta Primary Node"), ("MOCK-D04-40002-Z-PRT", "Delta Interface Right"), ("MOCK-D04-40003-W-PRT", "Delta Rotor")]),
+    "MOCK-D04-40004-X-SUB": ("Delta Processor Node Left", [("MOCK-D04-40001-Y-PRT", "Delta Primary Node"), ("MOCK-D04-40005-Z-PRT", "Delta Interface Left"), ("MOCK-D04-40003-W-PRT", "Delta Rotor")]),
+    "MOCK-D04-40006-X-SUB": ("Delta Processor Array Right", [("MOCK-D04-40001-Y-PRT", "Delta Primary Node"), ("MOCK-D04-40007-Y-PRT", "Delta Secondary Node"), ("MOCK-D04-40008-Z-PRT", "Delta Interface Array Right"), ("MOCK-D04-40003-W-PRT", "Delta Rotor")]),
+    "MOCK-E05-50001-X-SUB": ("Epsilon Housing Sub Right", [("MOCK-E05-50001-Y-PRT", "Epsilon Housing Right"), ("MOCK-E05-50002-Z-PRT", "Epsilon Axis")]),
+    "MOCK-E05-50003-X-SUB": ("Epsilon Housing Sub Left", [("MOCK-E05-50003-Y-PRT", "Epsilon Housing Left"), ("MOCK-E05-50002-Z-PRT", "Epsilon Axis")]),
+    "MOCK-F06-60001-X-SUB": ("Zeta Mount Assembly RH", [("MOCK-F06-60001-Y-PRT", "Zeta Mount RH"), ("MOCK-F06-60002-Z-PRT", "Zeta Fastener")]),
+    "MOCK-F06-60003-X-SUB": ("Zeta Mount Assembly LH", [("MOCK-F06-60003-Y-PRT", "Zeta Mount LH"), ("MOCK-F06-60002-Z-PRT", "Zeta Fastener")]),
+    "MOCK-G07-70001-X-SUB": ("Omega Framework Sub Left", [("MOCK-G07-70001-Y-PRT", "Omega Anchor Left"), ("MOCK-G07-70002-Y-PRT", "Omega Frame Left"), ("MOCK-A01-10005-Z-PRT", "Alpha Buffer Left"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")])
 }
 
 SF_DATA_FILE = os.path.join(DATA_DIR, "sf_data.json")
@@ -159,9 +145,6 @@ def load_sf_data():
     except Exception as e:
         print("Error loading SF_DATA from DB:", e)
         SF_DATA = dict(SF_DATA_DEFAULT)
-
-def save_sf_data():
-    pass
 
 
 DB_FILE = os.path.join(DATA_DIR, "traceability.db")
@@ -257,7 +240,7 @@ def init_db():
             dt_line TEXT,
             shift_line TEXT,
             remarks TEXT,
-            status TEXT DEFAULT 'pending',
+            status TEXT DEFAULT 'In Rack',
             created_at TEXT NOT NULL
         )
     ''')
@@ -272,34 +255,6 @@ def init_db():
     
     load_sf_data()
 
-def db_query(query, args=(), fetch=True):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute(query, args)
-    result = None
-    if fetch:
-        result = c.fetchall()
-    else:
-        conn.commit()
-    conn.close()
-    return result
-
-def get_next_sequence():
-    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM records WHERE date(created_at) = ?", (today_str,))
-    count = c.fetchone()[0]
-    conn.close()
-    return count + 1
-
-def generate_sub_batch_id(shift, station):
-    today_str = datetime.datetime.now().strftime("%Y%m%d")
-    seq = get_next_sequence()
-    st_num = station.replace("S", "") if station else "00"
-    if not shift:
-        shift = "X"
-    return f"SB-{today_str}-{shift}-{st_num}-{seq:03d}"
 
 def save_to_excel(data):
     headers = [
@@ -419,6 +374,7 @@ def print_html_slip(record_data):
             
     printer_name = config.get("zebra_printer", "")
     qr_payload = {
+        "sub_batch_id": record_data.get('sub_batch_id', ''),
         "full_pn_sf": record_data.get('pn_sf', ''),
         "part_name_sf": record_data.get('part_sf', ''),
         "rm1_pn": record_data.get('rm1_pn', ''),
@@ -457,8 +413,11 @@ def print_html_slip(record_data):
     zpl.append("^FO10,70^GB460,40,40^FS")
     zpl.append(f"^FO10,80^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
     
-    y = 120
-    def add_row(label, value, font_size=20, y_inc=25):
+    sb_id_val = format_val(record_data.get('sub_batch_id'))
+    zpl.append(f"^BY2^FO40,115^BCN,40,N,N,N^FD{sb_id_val}^FS")
+    
+    y = 185
+    def add_row(label, value, font_size=18, y_inc=20):
         nonlocal y
         zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FD{label}^FS")
         zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FB460,1,0,R^FD{value}\\&^FS")
@@ -466,27 +425,19 @@ def print_html_slip(record_data):
 
     add_row("PN Semi fini", format_val(record_data.get('pn_sf')))
     add_row("Part Name (SF)", format_val(record_data.get('part_sf')))
-    
-    for i in range(1, 5):
-        pn_key = f"rm{i}_pn"
-        name_key = f"rm{i}_name"
-        if record_data.get(pn_key):
-            lbl_suffix = "" if i == 1 else str(i)
-            add_row(f"PN RM{lbl_suffix} Ref", format_val(record_data.get(pn_key)))
-            add_row(f"Part Name (RM{lbl_suffix})", format_val(record_data.get(name_key)))
             
-    y += 5
+    y += 3
     zpl.append(f"^FO10,{y}^GB460,1,1^FS")
-    y += 12
+    y += 8
     
     add_row("Batch No. 1", format_val(record_data.get('batch1')))
     add_row("Batch No. 2", format_val(record_data.get('batch2')))
     add_row("Batch No. 3", format_val(record_data.get('batch3')))
-    add_row("Quantity", f"{format_val(record_data.get('quantity'))} pcs", font_size=22)
+    add_row("Quantity", f"{format_val(record_data.get('quantity'))} pcs", font_size=20, y_inc=22)
     
-    y += 5
+    y += 3
     zpl.append(f"^FO10,{y}^GB460,1,1^FS")
-    y += 12
+    y += 8
     
     add_row("Shift SP", format_val(record_data.get('shift_sp')))
     add_row("Op ID", format_val(record_data.get('op_id')))
@@ -496,14 +447,14 @@ def print_html_slip(record_data):
     dt_line = format_val(record_data.get('dt_line'))[:16] if record_data.get('dt_line') else '-'
     add_row("Line Entry", dt_line)
     
-    y += 5
+    y += 3
     zpl.append(f"^FO10,{y}^GB460,2,2^FS")
-    y += 12
+    y += 8
     
     status = format_val(record_data.get('status', '-'))
     printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    zpl.append(f"^FO10,{y}^A0N,18,18^FB460,1,0,C^FDStatus: {status} | Printed: {printed}\\&^FS")
-    y += 20
+    zpl.append(f"^FO10,{y}^A0N,16,16^FB460,1,0,C^FDStatus: {status} | Printed: {printed}\\&^FS")
+    y += 18
     
     zpl.append(f"^FO130,{y}^BQN,2,2^FDQA,{json_str}^FS")
     zpl.append("^PQ2")
@@ -1376,17 +1327,20 @@ class TraceabilityApp(tk.Tk):
         self.paned.add(self.notebook, weight=1)
         
         self.tab1 = ttk.Frame(self.notebook)
+        self.tab5 = ttk.Frame(self.notebook)
         self.tab4 = ttk.Frame(self.notebook)
         self.tab2 = ttk.Frame(self.notebook)
         self.tab3 = ttk.Frame(self.notebook)
         
         self.notebook.add(self.tab1, text="New Entry")
-        self.notebook.add(self.tab4, text="Print Label")
+        self.notebook.add(self.tab5, text="Consume to Line")
+        self.notebook.add(self.tab4, text="Search & Reprint")
         self.notebook.add(self.tab2, text="Records")
         self.notebook.add(self.tab3, text="KPIs")
         self.notebook.hide(self.tab3)
         
         self.build_tab1()
+        self.build_tab5()
         self.build_tab4()
         self.build_tab2()
         self.build_tab3()
@@ -1404,21 +1358,42 @@ class TraceabilityApp(tk.Tk):
         self.t1_left.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
         self.t1_left.pack_propagate(False) # Keep fixed width for left panel
         
+        separator = ttk.Separator(top_panel, orient='vertical')
+        separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=10)
+        
         self.t1_right = tk.Frame(top_panel, bg=BG_COLOR)
         self.t1_right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # ---------------- LEFT PANEL ----------------
-        # QR Scan Frame
-        _, scan_frame = self.create_card(self.t1_left, "Scan Label (QR Code)", fg_color=WARNING_COLOR)
+        # Shift Target Tracker
+        _, tracker_frame = self.create_card(self.t1_left, "Shift Target Tracker", fg_color=ACCENT_COLOR)
         
-        ttk.Label(scan_frame, text="Scan Label Here:").pack(side=tk.TOP, anchor="w", pady=2)
-        self.var_scan_input = tk.StringVar()
-        scan_entry = ttk.Entry(scan_frame, textvariable=self.var_scan_input, width=35)
-        scan_entry.pack(side=tk.TOP, fill=tk.X, pady=2)
-        scan_entry.bind("<Return>", self.on_scan_enter)
+        tracker_frame.config(height=260)
+        tracker_frame.pack_propagate(False)
         
-        ttk.Button(scan_frame, text="Upload QR Image", command=self.upload_qr_image).pack(side=tk.TOP, fill=tk.X, pady=5)
-
+        self.tracker_canvas = tk.Canvas(tracker_frame, bg=SURFACE_COLOR, highlightthickness=0)
+        tracker_scrollbar = ttk.Scrollbar(tracker_frame, orient="vertical", command=self.tracker_canvas.yview)
+        
+        self.tracker_scroll_frame = tk.Frame(self.tracker_canvas, bg=SURFACE_COLOR)
+        
+        self.tracker_scroll_frame.bind(
+            "<Configure>",
+            lambda e: self.tracker_canvas.configure(scrollregion=self.tracker_canvas.bbox("all"))
+        )
+        
+        self.tracker_canvas.create_window((0, 0), window=self.tracker_scroll_frame, anchor="nw", width=330)
+        self.tracker_canvas.configure(yscrollcommand=tracker_scrollbar.set)
+        
+        self.tracker_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=2, pady=5)
+        tracker_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=5)
+        
+        style = ttk.Style()
+        style.configure("TProgressbar", thickness=15)
+        style.configure("Safe.Horizontal.TProgressbar", background=SUCCESS_COLOR, troughcolor=BG_COLOR, thickness=15)
+        style.configure("Warn.Horizontal.TProgressbar", background=WARNING_COLOR, troughcolor=BG_COLOR, thickness=15)
+        style.configure("Danger.Horizontal.TProgressbar", background=ERROR_COLOR, troughcolor=BG_COLOR, thickness=15)
+        
+        self.lbl_scroll_indicator = tk.Label(self.t1_left, text="▼ Scroll down for more refs ▼", bg=BG_COLOR, fg=TEXT_MUTED, font=HMI_FONT_S)
         # Quick Search
         _, search_frame = self.create_card(self.t1_left, "Quick Search")
         self.sv_search = tk.StringVar()
@@ -1488,18 +1463,27 @@ class TraceabilityApp(tk.Tk):
         # Section 1: Part Reference
         _, lf1 = self.create_card(self.form_frame, "Part Reference")
         
-        ttk.Label(lf1, text="FULL PN° Semi fini ★", width=32).grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Label(lf1, text="Scan Main RM Barcode", width=32).grid(row=0, column=0, sticky="w", pady=2)
+        self.var_scan_rm_t1 = tk.StringVar()
+        self.entry_scan_rm_t1 = ttk.Entry(lf1, textvariable=self.var_scan_rm_t1, width=30)
+        self.entry_scan_rm_t1.grid(row=0, column=1, sticky="w", pady=2, padx=5)
+        self.entry_scan_rm_t1.bind("<Return>", self.on_rm_scanned_t1)
+        
+        self.lbl_scan_rm_status = tk.Label(lf1, text="", bg=SURFACE_COLOR, font=HMI_FONT_S)
+        self.lbl_scan_rm_status.grid(row=0, column=2, columnspan=2, sticky="w", padx=10)
+        
+        ttk.Label(lf1, text="FULL PN° Semi fini ★", width=32).grid(row=1, column=0, sticky="w", pady=2)
         self.cb_sf_pn = ttk.Combobox(lf1, state="readonly", width=30)
-        self.cb_sf_pn.grid(row=0, column=1, sticky="w", pady=2, padx=5)
+        self.cb_sf_pn.grid(row=1, column=1, sticky="w", pady=2, padx=5)
         self.cb_sf_pn.bind("<<ComboboxSelected>>", self.on_sf_selected)
         
-        ttk.Label(lf1, text="PART NAME (SF)").grid(row=0, column=2, sticky="w", pady=2, padx=10)
+        ttk.Label(lf1, text="PART NAME (SF)").grid(row=1, column=2, sticky="w", pady=2, padx=10)
         self.var_part_sf = tk.StringVar()
-        ttk.Entry(lf1, textvariable=self.var_part_sf, state="disabled", width=30).grid(row=0, column=3, sticky="w", pady=2)
+        ttk.Entry(lf1, textvariable=self.var_part_sf, state="disabled", width=30).grid(row=1, column=3, sticky="w", pady=2)
         
         # Dynamic RM Container T1
         self.rm_container_t1 = tk.Frame(lf1, bg=SURFACE_COLOR)
-        self.rm_container_t1.grid(row=1, column=0, columnspan=4, sticky="w", pady=5)
+        self.rm_container_t1.grid(row=2, column=0, columnspan=4, sticky="w", pady=5)
         self.rm_vars_t1 = []
         
         # Section 2: Batch & Qty
@@ -1589,153 +1573,256 @@ class TraceabilityApp(tk.Tk):
         self.f_dt_sp, self.de_sp, self.h_sp, self.m_sp = create_dt_picker(lf4, "Sub-Process Work Date/Time")
         self.f_dt_sp.grid(row=0, column=0, sticky="w", pady=5)
         
-        self.f_dt_line, self.de_line, self.h_line, self.m_line = create_dt_picker(lf4, "Production Line Entry Date/Time")
-        self.f_dt_line.grid(row=1, column=0, sticky="w", pady=5)
-        
         # Section 5: Additional Info
         _, lf5 = self.create_card(self.form_frame, "Additional Info")
         
-        ttk.Label(lf5, text="Work in PROD line by Shift", width=32).grid(row=0, column=0, sticky="w", pady=2)
-        self.cb_shift_line = ttk.Combobox(lf5, values=["A", "B", "C"], state="readonly", width=5)
-        self.cb_shift_line.grid(row=0, column=1, sticky="w", pady=2, padx=5)
-        
-        ttk.Label(lf5, text="Remarks", width=32).grid(row=1, column=0, sticky="nw", pady=2)
+        ttk.Label(lf5, text="Remarks", width=32).grid(row=0, column=0, sticky="nw", pady=2)
         self.txt_remarks = tk.Text(lf5, height=3, width=50, bg=SURFACE_COLOR, fg=TEXT_COLOR)
-        self.txt_remarks.grid(row=1, column=1, sticky="w", pady=2, padx=5)
+        self.txt_remarks.grid(row=0, column=1, sticky="w", pady=2, padx=5)
         
-    def build_tab4(self):
-        # 3-Column Layout for True Centering
-        self.t4_left = tk.Frame(self.tab4, bg=BG_COLOR)
-        self.t4_left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    def build_tab5(self):
+        # Consume to Line UI
+        main_frame = tk.Frame(self.tab5, bg=BG_COLOR)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        self.t4_center = tk.Frame(self.tab4, bg=BG_COLOR, width=950)
-        self.t4_center.pack(side=tk.LEFT, fill=tk.Y, pady=10)
-        self.t4_center.pack_propagate(False)
+        tk.Label(main_frame, text="Consume Box to Production Line", bg=BG_COLOR, fg=WARNING_COLOR, font=HMI_FONT_L).pack(pady=(0, 20))
         
-        self.t4_right = tk.Frame(self.tab4, bg=BG_COLOR)
-        self.t4_right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # Dedicated Print Label Form (No DB Saving)
-        self.pl_frame = tk.Frame(self.t4_center, bg=BG_COLOR)
-        self.pl_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        _, card = self.create_card(main_frame, "Scan Box Label")
         
-        # Part Reference
-        _, lf1 = self.create_card(self.pl_frame, "Part Reference")
+        ttk.Label(card, text="Scan Sub-Batch ID (SB_ID) ★", font=HMI_FONT_M).pack(pady=10)
+        self.var_consume_scan = tk.StringVar()
+        entry_scan = ttk.Entry(card, textvariable=self.var_consume_scan, width=40, font=HMI_FONT_L)
+        entry_scan.pack(pady=10)
+        entry_scan.bind("<Return>", self.on_consume_scan)
         
-        ttk.Label(lf1, text="Scan Main RM Barcode ★", width=32).grid(row=0, column=0, sticky="w", pady=2)
-        self.pl_var_scan_rm = tk.StringVar()
-        self.pl_entry_scan_rm = ttk.Entry(lf1, textvariable=self.pl_var_scan_rm, width=30)
-        self.pl_entry_scan_rm.grid(row=0, column=1, sticky="w", pady=2, padx=5)
-        self.pl_entry_scan_rm.bind("<Return>", self.pl_on_rm_scanned)
+        shift_frame = tk.Frame(card, bg=SURFACE_COLOR)
+        shift_frame.pack(pady=5)
         
-        self.pl_lbl_status = tk.Label(lf1, text="", bg=SURFACE_COLOR, font=HMI_FONT_S)
-        self.pl_lbl_status.grid(row=0, column=2, columnspan=2, sticky="w", padx=10)
-        
-        ttk.Label(lf1, text="Matched SF PN:").grid(row=1, column=0, sticky="w", pady=2)
-        self.pl_var_sf_pn = tk.StringVar()
-        ttk.Entry(lf1, textvariable=self.pl_var_sf_pn, state="readonly", width=30).grid(row=1, column=1, sticky="w", pady=2, padx=5)
-        
-        ttk.Label(lf1, text="PART NAME (SF)").grid(row=1, column=2, sticky="w", pady=2, padx=10)
-        self.pl_var_part_sf = tk.StringVar()
-        ttk.Entry(lf1, textvariable=self.pl_var_part_sf, state="readonly", width=30).grid(row=1, column=3, sticky="w", pady=2)
-        
-        # Dynamic RM Container T4
-        self.rm_container_t4 = tk.Frame(lf1, bg=SURFACE_COLOR)
-        self.rm_container_t4.grid(row=2, column=0, columnspan=4, sticky="w", pady=5)
-        self.rm_vars_t4 = []
-        
-        # Batch & Qty
-        _, lf2 = self.create_card(self.pl_frame, "Batch Numbers & Quantity")
-        
-        ttk.Label(lf2, text="Batch No. 1 / 2 / 3", width=32).grid(row=0, column=0, sticky="w", pady=2)
-        b_frame = tk.Frame(lf2, bg=SURFACE_COLOR)
-        b_frame.grid(row=0, column=1, sticky="w", pady=2, padx=5)
-        self.pl_var_b1 = tk.StringVar()
-        self.pl_var_b2 = tk.StringVar()
-        self.pl_var_b3 = tk.StringVar()
-        self.pl_var_b1.trace_add("write", lambda *args: self.pl_var_b1.set(self.pl_var_b1.get().upper()))
-        self.pl_var_b2.trace_add("write", lambda *args: self.pl_var_b2.set(self.pl_var_b2.get().upper()))
-        self.pl_var_b3.trace_add("write", lambda *args: self.pl_var_b3.set(self.pl_var_b3.get().upper()))
-        ttk.Entry(b_frame, textvariable=self.pl_var_b1, width=15).pack(side=tk.LEFT, padx=2)
-        ttk.Entry(b_frame, textvariable=self.pl_var_b2, width=15).pack(side=tk.LEFT, padx=2)
-        ttk.Entry(b_frame, textvariable=self.pl_var_b3, width=15).pack(side=tk.LEFT, padx=2)
-        
-        ttk.Label(lf2, text="Quantity ★", width=32).grid(row=1, column=0, sticky="w", pady=2)
-        q_frame = tk.Frame(lf2, bg=SURFACE_COLOR)
-        q_frame.grid(row=1, column=1, sticky="w", pady=2, padx=5)
-        self.pl_var_qty = tk.StringVar()
-        ttk.Entry(q_frame, textvariable=self.pl_var_qty, width=10, font=HMI_FONT_M).pack(side=tk.LEFT, padx=2)
-        ttk.Label(q_frame, text="pcs").pack(side=tk.LEFT, padx=5)
-        
-        # Operations
-        _, lf3 = self.create_card(self.pl_frame, "Operation Details")
-        
-        ttk.Label(lf3, text="Work in Sub-Process by Shift ★", width=32).grid(row=0, column=0, sticky="w", pady=2)
-        self.pl_cb_shift_sp = ttk.Combobox(lf3, values=["A", "B", "C"], state="readonly", width=5)
-        self.pl_cb_shift_sp.grid(row=0, column=1, sticky="w", pady=2, padx=5)
-        self.pl_cb_shift_sp.set("")
-        
-        ttk.Label(lf3, text="Op ID ★").grid(row=0, column=2, sticky="w", pady=2, padx=10)
-        self.pl_var_op_id = tk.StringVar()
-        ttk.Entry(lf3, textvariable=self.pl_var_op_id, width=15).grid(row=0, column=3, sticky="w", pady=2)
-        
-        ttk.Label(lf3, text="Station ★").grid(row=0, column=4, sticky="w", pady=2, padx=10)
-        self.pl_cb_station = ttk.Combobox(lf3, values=["S06", "S07", "S10", "S11"], state="readonly", width=5)
-        self.pl_cb_station.grid(row=0, column=5, sticky="w", pady=2)
-        
-        # Dates
-        _, lf4 = self.create_card(self.pl_frame, "Date & Time")
-        
-        def create_pl_dt(parent, label_text):
-            frame = tk.Frame(parent, bg=SURFACE_COLOR)
-            ttk.Label(frame, text=label_text, width=32).pack(side=tk.LEFT, padx=5)
-            de = DateEntry(frame, width=12, background=ACCENT_COLOR, foreground='white', borderwidth=2)
-            de.pack(side=tk.LEFT, padx=2)
-            h_spin = tk.Spinbox(frame, from_=0, to=23, wrap=True, width=3, format="%02.0f", bg=SURFACE_COLOR, fg=TEXT_COLOR)
-            h_spin.pack(side=tk.LEFT, padx=2)
-            ttk.Label(frame, text=":").pack(side=tk.LEFT)
-            m_spin = tk.Spinbox(frame, from_=0, to=59, wrap=True, width=3, format="%02.0f", bg=SURFACE_COLOR, fg=TEXT_COLOR)
-            m_spin.pack(side=tk.LEFT, padx=2)
-            def set_now():
-                now = datetime.datetime.now()
-                de.set_date(now.date())
-                h_spin.delete(0, "end"); h_spin.insert(0, f"{now.hour:02d}")
-                m_spin.delete(0, "end"); m_spin.insert(0, f"{now.minute:02d}")
-            
-            live_var = tk.BooleanVar(value=True)
-            cb_live = ttk.Checkbutton(frame, text="Live", variable=live_var)
-            cb_live.pack(side=tk.LEFT, padx=5)
-            
-            def auto_update():
-                if live_var.get(): set_now()
-                parent.after(1000, auto_update)
+        self.var_manual_shift = tk.BooleanVar(value=False)
+        def toggle_manual():
+            if self.var_manual_shift.get():
+                self.cb_consume_shift.config(state="readonly")
+            else:
+                self.cb_consume_shift.config(state="disabled")
+                self.cb_consume_shift.set(getattr(self, 'app_user_shift', ''))
                 
-            def stop_live(*args): live_var.set(False)
-            de.bind("<<DateEntrySelected>>", stop_live)
-            h_spin.bind("<Button-1>", stop_live); h_spin.bind("<Key>", stop_live)
-            m_spin.bind("<Button-1>", stop_live); m_spin.bind("<Key>", stop_live)
-            
-            auto_update()
-            return frame, de, h_spin, m_spin
-            
-        self.pl_f_sp, self.pl_de_sp, self.pl_h_sp, self.pl_m_sp = create_pl_dt(lf4, "Sub-Process Work Date/Time")
-        self.pl_f_sp.grid(row=0, column=0, sticky="w", pady=5)
-        self.pl_f_line, self.pl_de_line, self.pl_h_line, self.pl_m_line = create_pl_dt(lf4, "Production Line Entry Date/Time")
-        self.pl_f_line.grid(row=1, column=0, sticky="w", pady=5)
+        cb_manual = ttk.Checkbutton(shift_frame, text="Manual Shift", variable=self.var_manual_shift, command=toggle_manual)
+        cb_manual.pack(side=tk.LEFT, padx=5)
         
-        # Add info
-        _, lf5 = self.create_card(self.pl_frame, "Additional Info")
-        ttk.Label(lf5, text="Work in PROD line by Shift", width=32).grid(row=0, column=0, sticky="w", pady=2)
-        self.pl_cb_shift_line = ttk.Combobox(lf5, values=["A", "B", "C"], state="readonly", width=5)
-        self.pl_cb_shift_line.grid(row=0, column=1, sticky="w", pady=2, padx=5)
-        ttk.Label(lf5, text="Remarks", width=32).grid(row=1, column=0, sticky="nw", pady=2)
-        self.pl_txt_remarks = tk.Text(lf5, height=3, width=50, bg=SURFACE_COLOR, fg=TEXT_COLOR)
-        self.pl_txt_remarks.grid(row=1, column=1, sticky="w", pady=2, padx=5)
+        self.cb_consume_shift = ttk.Combobox(shift_frame, values=["A", "B", "C"], state="disabled", width=5, font=HMI_FONT_M)
+        self.cb_consume_shift.pack(side=tk.LEFT, padx=5)
         
-        btn_frame = tk.Frame(self.t4_center, bg=BG_COLOR)
-        btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
-        ttk.Button(btn_frame, text="Generate & Print Label", style="Warning.TButton", command=self.print_standalone_label).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Clear", style="Secondary.TButton", command=self.clear_pl_form).pack(side=tk.LEFT, padx=5)
+        self.lbl_consume_status = tk.Label(card, text="", bg=SURFACE_COLOR, font=HMI_FONT_M)
+        self.lbl_consume_status.pack(pady=20)
+
+    def on_consume_scan(self, event=None):
+        scan_data = self.var_consume_scan.get().strip()
+        if hasattr(self, 'var_manual_shift') and self.var_manual_shift.get():
+            shift = self.cb_consume_shift.get()
+        else:
+            shift = getattr(self, 'app_user_shift', '')
+            
+        if not scan_data: return
+        if not shift:
+            self.lbl_consume_status.config(text="Please select shift first.", fg=ERROR_COLOR)
+            return
+            
+        sb_id = scan_data
+        if scan_data.startswith("{") and scan_data.endswith("}"):
+            try:
+                import json
+                data = json.loads(scan_data)
+                sb_id = data.get("sub_batch_id", "")
+                if not sb_id:
+                    dt_sp = data.get("sub_process_datetime", "")
+                    station = data.get("station", "")
+                    shift_sp = data.get("sub_process_shift", "")
+                    if dt_sp and station and shift_sp:
+                        sb_id = f"SB{dt_sp.replace('-', '').replace(':', '').replace(' ', '')}{station}{shift_sp}"
+            except Exception:
+                pass
+                
+        if not sb_id:
+            self.lbl_consume_status.config(text="Invalid barcode format.", fg=ERROR_COLOR)
+            return
+
+        dt_line = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("SELECT id, status, dt_sp FROM records WHERE sub_batch_id = ?", (sb_id,))
+        row = c.fetchone()
+        
+        if not row:
+            self.lbl_consume_status.config(text="Error: Sub-Batch ID not found in database!", fg=ERROR_COLOR)
+            conn.close()
+            return
+            
+        if row[1] == 'Consumed':
+            self.lbl_consume_status.config(text=f"Warning: Box {sb_id} is already Consumed!", fg=WARNING_COLOR)
+            conn.close()
+            self.var_consume_scan.set("")
+            return
+            
+        dt_sp = row[2]
+        c.execute("UPDATE records SET status = 'Consumed', dt_line = ?, shift_line = ? WHERE sub_batch_id = ?", (dt_line, shift, sb_id))
+        conn.commit()
+        conn.close()
+        
+        self.update_excel_record(dt_sp, dt_line, shift)
+        
+        self.lbl_consume_status.config(text=f"Success! {sb_id} consumed at {dt_line}", fg=SUCCESS_COLOR)
+        self.var_consume_scan.set("")
+        self.refresh_records_treeview()
+        self.after(5000, lambda: self.lbl_consume_status.config(text=""))
+
+    def update_excel_record(self, dt_sp, dt_line, shift_line):
+        if not os.path.exists(EXCEL_FILE): return
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(EXCEL_FILE)
+            if "Sub-process fill by TL" not in wb.sheetnames: return
+            ws = wb["Sub-process fill by TL"]
+            
+            for row in range(2, ws.max_row + 1):
+                cell_dt_sp = ws.cell(row=row, column=12).value
+                if cell_dt_sp == dt_sp:
+                    ws.cell(row=row, column=13).value = dt_line
+                    ws.cell(row=row, column=14).value = shift_line
+            wb.save(EXCEL_FILE)
+        except Exception as e:
+            print("Error updating excel:", e)
+            
+    def build_tab4(self):
+        # Container Split
+        main_frame = tk.Frame(self.tab4, bg=BG_COLOR)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        tk.Label(main_frame, text="Search & Reprint Label", bg=BG_COLOR, fg=ACCENT_COLOR, font=HMI_FONT_L).pack(pady=(0, 20))
+        
+        _, search_card = self.create_card(main_frame, "Search Record")
+        ttk.Label(search_card, text="Scan QR Code or Type SB_ID ★", font=HMI_FONT_M).pack(pady=10)
+        self.var_reprint_scan = tk.StringVar()
+        entry_scan = ttk.Entry(search_card, textvariable=self.var_reprint_scan, width=40, font=HMI_FONT_L)
+        entry_scan.pack(pady=10)
+        entry_scan.bind("<Return>", self.on_reprint_scan)
+        
+        self.lbl_reprint_status = tk.Label(search_card, text="", bg=SURFACE_COLOR, font=HMI_FONT_M)
+        self.lbl_reprint_status.pack(pady=10)
+        
+        _, details_card = self.create_card(main_frame, "Record Details")
+        self.txt_reprint_details = tk.Text(details_card, height=12, width=80, bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M, state="disabled")
+        self.txt_reprint_details.pack(pady=10, padx=10)
+        
+        self.btn_do_reprint = ttk.Button(details_card, text="Print Duplicate Label", style="Warning.TButton", command=self.do_reprint_action)
+        self.btn_do_reprint.pack(pady=10)
+        self.btn_do_reprint.config(state="disabled")
+
+    def on_reprint_scan(self, event=None):
+        raw_input = self.var_reprint_scan.get().strip()
+        if not raw_input: return
+        
+        sb_id = raw_input
+        # If it looks like a JSON QR Code, extract the SB_ID
+        if raw_input.startswith('{') and raw_input.endswith('}'):
+            try:
+                import json
+                data = json.loads(raw_input)
+                sb_id = data.get("sub_batch_id", "")
+            except json.JSONDecodeError:
+                pass
+                
+        if not sb_id:
+            self.lbl_reprint_status.config(text="Error: Could not determine Sub-Batch ID!", fg=ERROR_COLOR)
+            self.txt_reprint_details.config(state="normal")
+            self.txt_reprint_details.delete("1.0", tk.END)
+            self.txt_reprint_details.config(state="disabled")
+            self.btn_do_reprint.config(state="disabled")
+            self.var_reprint_scan.set("")
+            return
+            
+        self.var_reprint_scan.set(sb_id)
+        
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM records WHERE sub_batch_id = ?", (sb_id,))
+        row = c.fetchone()
+        conn.close()
+        
+        if not row:
+            self.lbl_reprint_status.config(text="Error: Record not found in Database!", fg=ERROR_COLOR)
+            self.txt_reprint_details.config(state="normal")
+            self.txt_reprint_details.delete("1.0", tk.END)
+            self.txt_reprint_details.config(state="disabled")
+            self.btn_do_reprint.config(state="disabled")
+            return
+            
+        self.lbl_reprint_status.config(text="Record authenticated successfully.", fg=SUCCESS_COLOR)
+        
+        details = (
+            f"Sub-Batch ID: {row['sub_batch_id']}\n"
+            f"SF PN: {row['pn_sf']} ({row['part_sf']})\n"
+            f"Quantity: {row['quantity']}\n"
+            f"Status: {row['status']}\n\n"
+            f"--- RM Components ---\n"
+            f"RM 1: {row['rm1_pn']}  |  Batch: {row['batch1']}\n"
+        )
+        if row['rm2_pn']: details += f"RM 2: {row['rm2_pn']}  |  Batch: {row['batch2']}\n"
+        if row['rm3_pn']: details += f"RM 3: {row['rm3_pn']}  |  Batch: {row['batch3']}\n"
+        if row['rm4_pn']: details += f"RM 4: {row['rm4_pn']}\n"
+        details += (
+            f"\n--- Process Info ---\n"
+            f"Operator ID: {row['op_id']}\n"
+            f"Station: {row['station']}\n"
+            f"Sub-Process Time: {row['dt_sp']} (Shift: {row['shift_sp']})\n"
+        )
+        if row['dt_line']:
+            details += f"Prod Line Time: {row['dt_line']} (Shift: {row['shift_line']})\n"
+        if row['remarks']:
+            details += f"Remarks: {row['remarks']}\n"
+        
+        self.txt_reprint_details.config(state="normal")
+        self.txt_reprint_details.delete("1.0", tk.END)
+        self.txt_reprint_details.insert(tk.END, details)
+        self.txt_reprint_details.config(state="disabled")
+        
+        self.btn_do_reprint.config(state="normal")
+        self.current_reprint_sb_id = sb_id
+        
+    def do_reprint_action(self):
+        if hasattr(self, 'current_reprint_sb_id'):
+            self.do_print(self.current_reprint_sb_id)
+            self.lbl_reprint_status.config(text="Label sent to printer.", fg=SUCCESS_COLOR)
+            self.after(3000, lambda: getattr(self, 'lbl_reprint_status', tk.Label()).config(text=""))
+            
+    def on_rm_scanned_t1(self, event=None):
+        scanned_rm = self.var_scan_rm_t1.get().strip()
+        if hasattr(self, 'lbl_scan_rm_status'):
+            self.lbl_scan_rm_status.config(text="")
+        if not scanned_rm: return
+        
+        matched_sf_pn = None
+        for sf_pn, (sf_name, rm_list) in SF_DATA.items():
+            if rm_list and rm_list[0][0] == scanned_rm:
+                matched_sf_pn = sf_pn
+                break
+                
+        if matched_sf_pn:
+            self.cb_sf_pn.config(state="readonly")
+            self.cb_sf_pn.set(matched_sf_pn)
+            if hasattr(self, 'lbl_scan_rm_status'):
+                self.lbl_scan_rm_status.config(text="Match Found!", fg=SUCCESS_COLOR)
+                self.after(3000, lambda: getattr(self, 'lbl_scan_rm_status', tk.Label()).config(text=""))
+            self.on_sf_selected(None)
+            self.cb_sf_pn.config(state="disabled")
+        else:
+            if hasattr(self, 'lbl_scan_rm_status'):
+                self.lbl_scan_rm_status.config(text="Mismatch! Invalid RM Barcode.", fg=ERROR_COLOR)
+                self.after(4000, lambda: getattr(self, 'lbl_scan_rm_status', tk.Label()).config(text=""))
+            self.var_scan_rm_t1.set("")
+        
+
 
     def build_tab2(self):
         filter_frame = tk.Frame(self.tab2, bg=SURFACE_COLOR)
@@ -1765,7 +1852,7 @@ class TraceabilityApp(tk.Tk):
         tree_frame = tk.Frame(self.tab2, bg=BG_COLOR)
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        cols = ("SB_ID", "SF_PN", "SF_Name", "Qty", "Shift", "Station", "DateTime", "Status")
+        cols = ("SB_ID", "SF_PN", "SF_Name", "Qty", "Shift", "Station", "Op_ID", "DateTime", "Status")
         self.tree_records = ttk.Treeview(tree_frame, columns=cols, show="headings")
         for c in cols:
             self.tree_records.heading(c, text=c, command=lambda _c=c: self.sort_treeview(self.tree_records, _c, False))
@@ -1803,7 +1890,7 @@ class TraceabilityApp(tk.Tk):
         start_month_str = f"{start_month_date.strftime('%Y-%m-%d')} 06:00:00"
         
         def get_stats(start_dt):
-            c.execute("SELECT shift_sp, SUM(quantity) FROM records WHERE created_at >= ? GROUP BY shift_sp", (start_dt,))
+            c.execute("SELECT shift_sp, SUM(quantity) FROM records WHERE dt_sp >= ? GROUP BY shift_sp", (start_dt,))
             rows = c.fetchall()
             stats = {'A': 0, 'B': 0, 'C': 0}
             for r in rows:
@@ -1819,61 +1906,6 @@ class TraceabilityApp(tk.Tk):
         conn.close()
         return today_stats, week_stats, month_stats
 
-    def build_tab3(self):
-        for widget in self.tab3.winfo_children():
-            widget.destroy()
-            
-        header = tk.Frame(self.tab3, bg=BG_COLOR)
-        header.pack(fill=tk.X, pady=10)
-        tk.Label(header, text="Production KPIs", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L).pack(side=tk.LEFT, padx=20)
-        ttk.Button(header, text="Refresh Data", command=self.build_tab3).pack(side=tk.RIGHT, padx=20)
-        
-        content = tk.Frame(self.tab3, bg=BG_COLOR)
-        content.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-        
-        try:
-            today_stats, week_stats, month_stats = self.get_dashboard_data()
-        except Exception as e:
-            tk.Label(content, text=f"Error loading data: {e}", fg="red", bg=BG_COLOR).pack()
-            return
-
-        def create_kpi_card(parent, title, stats):
-            total, a, b, c = stats
-            card = tk.Frame(parent, bg=SURFACE_COLOR, bd=2, relief="flat", highlightbackground=BORDER_COLOR, highlightthickness=1)
-            card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
-            
-            tk.Label(card, text=title, bg=SURFACE_COLOR, fg=WARNING_COLOR, font=HMI_FONT_L).pack(pady=10)
-            tk.Label(card, text=f"{total:,} pcs", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=("Helvetica", 36, "bold")).pack(pady=5)
-            
-            c_width = 300
-            c_height = 200
-            canvas = tk.Canvas(card, width=c_width, height=c_height, bg=SURFACE_COLOR, highlightthickness=0)
-            canvas.pack(pady=20)
-            
-            max_val = max(1, a, b, c)
-            shifts = [("Shift A", a, STATUS_RUNNING), ("Shift B", b, SUCCESS_COLOR), ("Shift C", c, ERROR_COLOR)]
-            
-            bar_w = 50
-            spacing = 30
-            start_x = (c_width - (3*bar_w + 2*spacing)) / 2
-            
-            for i, (name, val, color) in enumerate(shifts):
-                x0 = start_x + i*(bar_w + spacing)
-                x1 = x0 + bar_w
-                h = (val / max_val) * (c_height - 50)
-                y0 = c_height - 30 - h
-                y1 = c_height - 30
-                
-                canvas.create_rectangle(x0, y0, x1, y1, fill=color, outline="")
-                canvas.create_text(x0 + bar_w/2, y0 - 15, text=str(val), fill=TEXT_COLOR, font=HMI_FONT_S)
-                canvas.create_text(x0 + bar_w/2, c_height - 10, text=name, fill=TEXT_MUTED, font=("Helvetica", 10))
-                
-        cards_frame = tk.Frame(content, bg=BG_COLOR)
-        cards_frame.pack(fill=tk.X, pady=20)
-        
-        create_kpi_card(cards_frame, "Today", today_stats)
-        create_kpi_card(cards_frame, "This Week", week_stats)
-        create_kpi_card(cards_frame, "This Month", month_stats)
 
     def update_clock(self):
         now = datetime.datetime.now()
@@ -1882,6 +1914,11 @@ class TraceabilityApp(tk.Tk):
         self.after(1000, self.update_clock)
 
     def update_stats(self):
+        PROD_RATES = {
+            "MOCK-A01-10001-X-SUB": 240
+        }
+        DEFAULT_RATE = 120  # default hourly rate if PN is not in PROD_RATES
+
         now = datetime.datetime.now()
         # Production day starts at 06:00 and ends at 05:59 the next day
         if now.hour < 6:
@@ -1891,28 +1928,102 @@ class TraceabilityApp(tk.Tk):
             start_dt = now.strftime("%Y-%m-%d 06:00:00")
             end_dt = (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d 05:59:59")
             
-        cur_shift = getattr(self, 'cb_shift_sp', None)
-        if cur_shift and cur_shift.get():
-            shift_val = cur_shift.get()
-        else:
+        shift_val = getattr(self, 'app_user_shift', "")
+        if not shift_val:
             shift_val = "-"
+            
+        current_pn = ""
+        if hasattr(self, 'cb_sf_pn'):
+            current_pn = self.cb_sf_pn.get()
         
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         
-        # Shift stats
-        c.execute("SELECT COUNT(*), SUM(quantity) FROM records WHERE created_at >= ? AND created_at <= ? AND shift_sp = ?", (start_dt, end_dt, shift_val))
+        # Shift & PN stats
+        if current_pn:
+            c.execute("SELECT COUNT(*), SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? AND pn_sf = ?", (start_dt, end_dt, shift_val, current_pn))
+        else:
+            c.execute("SELECT COUNT(*), SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ?", (start_dt, end_dt, shift_val))
+            
         res_shift = c.fetchone()
         shift_count = res_shift[0] if res_shift[0] else 0
         shift_qty = res_shift[1] if res_shift[1] else 0
         
-        # Today stats
-        c.execute("SELECT COUNT(*) FROM records WHERE created_at >= ? AND created_at <= ?", (start_dt, end_dt))
+        # Today stats (Overall)
+        c.execute("SELECT COUNT(*) FROM records WHERE dt_sp >= ? AND dt_sp <= ?", (start_dt, end_dt))
         today_count = c.fetchone()[0]
+        
+        # Get all PNs produced in this shift
+        c.execute("SELECT pn_sf, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY pn_sf", (start_dt, end_dt, shift_val))
+        shift_pns_data = {row[0]: (row[1] or 0) for row in c.fetchall() if row[0]}
         
         conn.close()
         
+        # Calculate Work Mins
+        wd = now.weekday()
+        if wd == 6:  # Sunday
+            work_mins = 0
+        elif wd == 4: # Friday
+            work_mins = 290
+        else:
+            work_mins = 440
+            
+        # Update Shift Target Tracker on Tab 1
+        if hasattr(self, 'tracker_scroll_frame'):
+            for widget in self.tracker_scroll_frame.winfo_children():
+                widget.destroy()
+                
+            all_pns_to_track = set(shift_pns_data.keys()).union(set(PROD_RATES.keys()))
+            sorted_pns = sorted(list(all_pns_to_track), key=lambda x: (x not in PROD_RATES, x))
+            
+            for pn in sorted_pns:
+                qty = shift_pns_data.get(pn, 0)
+                rate = PROD_RATES.get(pn, DEFAULT_RATE)
+                tgt = int((work_mins / 60.0) * rate)
+                pct = min(100, (qty / tgt) * 100) if tgt > 0 else 0
+                
+                f = tk.Frame(self.tracker_scroll_frame, bg=SURFACE_COLOR)
+                f.pack(fill=tk.X, pady=(0, 10))
+                
+                part_name = SF_DATA.get(pn, ("", []))[0]
+                pn_display = f"{pn} ({part_name})" if part_name else pn
+                lbl = tk.Label(f, text=f"{pn_display}\nProduced: {qty:,} / Target: {tgt:,}", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_S, justify=tk.LEFT)
+                lbl.pack(anchor="w")
+                
+                if pct >= 80:
+                    pb_style = "Safe.Horizontal.TProgressbar"
+                elif pct >= 40:
+                    pb_style = "Warn.Horizontal.TProgressbar"
+                else:
+                    pb_style = "Danger.Horizontal.TProgressbar"
+                
+                pb = ttk.Progressbar(f, style=pb_style, orient="horizontal", mode="determinate")
+                pb.pack(fill=tk.X, pady=(2, 0))
+                pb['value'] = pct
+                
+                # Bind mousewheel to children too
+                def _on_mw(e, cvs=self.tracker_canvas): 
+                    cvs.yview_scroll(int(-1*(e.delta/120)), "units")
+                    return "break"
+                    
+                lbl.bind("<MouseWheel>", _on_mw)
+                pb.bind("<MouseWheel>", _on_mw)
+                f.bind("<MouseWheel>", _on_mw)
 
+            def _on_canvas_mw(e):
+                self.tracker_canvas.yview_scroll(int(-1*(e.delta/120)), "units")
+                return "break"
+                
+            self.tracker_canvas.bind("<MouseWheel>", _on_canvas_mw)
+            self.tracker_scroll_frame.bind("<MouseWheel>", _on_canvas_mw)
+            
+            self.tracker_scroll_frame.update_idletasks()
+            self.tracker_canvas.config(scrollregion=self.tracker_canvas.bbox("all"))
+            
+            if len(sorted_pns) > 4:
+                self.lbl_scroll_indicator.pack(pady=(0, 5), before=self.t1_left.winfo_children()[2])
+            else:
+                self.lbl_scroll_indicator.pack_forget()
         
         self.lbl_title_recs.config(text=f"Records (Shift {shift_val})")
         self.side_stat_recs.config(text=str(shift_count))
@@ -1960,6 +2071,7 @@ class TraceabilityApp(tk.Tk):
                 self.rm_vars_t1.append((cb_var, name_var))
 
     def update_sub_batch_preview(self):
+        self.update_stats()
         pass
 
     def get_dt_string(self, de, h, m):
@@ -1967,6 +2079,9 @@ class TraceabilityApp(tk.Tk):
         return f"{d.strftime('%Y-%m-%d')} {h.get()}:{m.get()}"
 
     def clear_form(self):
+        if hasattr(self, 'var_scan_rm_t1'):
+            self.var_scan_rm_t1.set("")
+        self.cb_sf_pn.config(state="readonly")
         self.cb_sf_pn.set("")
         self.var_part_sf.set("")
         for widget in getattr(self, "rm_container_t1", tk.Frame()).winfo_children():
@@ -1985,15 +2100,15 @@ class TraceabilityApp(tk.Tk):
         self.h_sp.delete(0, "end"); self.h_sp.insert(0, f"{now.hour:02d}")
         self.m_sp.delete(0, "end"); self.m_sp.insert(0, f"{now.minute:02d}")
         
-        self.de_line.set_date(now.date())
-        self.h_line.delete(0, "end"); self.h_line.insert(0, f"{now.hour:02d}")
-        self.m_line.delete(0, "end"); self.m_line.insert(0, f"{now.minute:02d}")
-        
-        self.cb_shift_line.set(getattr(self, 'app_user_shift', ''))
         self.txt_remarks.delete("1.0", tk.END)
+        if hasattr(self, 'cb_consume_shift') and hasattr(self, 'var_manual_shift'):
+            if not self.var_manual_shift.get():
+                self.cb_consume_shift.set(getattr(self, 'app_user_shift', ''))
         self.update_sub_batch_preview()
 
     def same_as_last(self):
+        if hasattr(self, 'var_scan_rm_t1'):
+            self.var_scan_rm_t1.set("")
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("SELECT * FROM records ORDER BY id DESC LIMIT 1")
@@ -2002,12 +2117,21 @@ class TraceabilityApp(tk.Tk):
         if rec:
             self.cb_sf_pn.set(rec[2])
             self.on_sf_selected(None)
-            self.var_qty.set(rec[9])
-            self.cb_shift_sp.set(rec[10])
-            self.cb_station.set(rec[12])
+            self.var_qty.set(rec[15])
+            self.cb_shift_sp.set(rec[16])
+            if hasattr(self, 'var_op_id'):
+                self.var_op_id.set(rec[17])
+            self.cb_station.set(rec[18])
             self.update_sub_batch_preview()
             self.lbl_status.config(text="Pre-filled with last record data.", fg=SUCCESS_COLOR)
             self.after(3000, lambda: self.lbl_status.config(text=""))
+
+    def background_excel_save(self, excel_data):
+        try:
+            save_to_excel(excel_data)
+            self.export_kpis_to_excel()
+        except Exception as e:
+            print(f"Background Excel Save Error: {e}")
 
     def save_record(self):
         sf_pn = self.cb_sf_pn.get()
@@ -2042,7 +2166,8 @@ class TraceabilityApp(tk.Tk):
 
         shift_sp = self.cb_shift_sp.get()
         dt_sp = self.get_dt_string(self.de_sp, self.h_sp, self.m_sp)
-        dt_line = f"{self.de_line.get_date()} {self.h_line.get()}:{self.m_line.get()}"
+        dt_line = ""
+        shift_line = ""
         
         sb_id = f"SB{dt_sp.replace('-', '').replace(':', '').replace(' ', '')}{station}{shift_sp}"
 
@@ -2055,8 +2180,8 @@ class TraceabilityApp(tk.Tk):
             rm_pns[2], rm_names[2], rm_pns[3], rm_names[3],
             self.var_b1.get(), self.var_b2.get(), self.var_b3.get(), qty,
             shift_sp, op_id, station, dt_sp, dt_line,
-            self.cb_shift_line.get(), self.txt_remarks.get("1.0", tk.END).strip(),
-            'pending', created_at, registered_by
+            shift_line, self.txt_remarks.get("1.0", tk.END).strip(),
+            'In Rack', created_at, registered_by
         )
 
         conn = sqlite3.connect(DB_FILE)
@@ -2080,14 +2205,11 @@ class TraceabilityApp(tk.Tk):
             rm_pns[2], rm_names[2], rm_pns[3], rm_names[3],
             self.var_b1.get(), self.var_b2.get(), self.var_b3.get(), qty,
             shift_sp, op_id, station, dt_sp, dt_line,
-            self.cb_shift_line.get(), self.txt_remarks.get("1.0", tk.END).strip(),
+            shift_line, self.txt_remarks.get("1.0", tk.END).strip(),
             registered_by
         ]
         
-        try:
-            save_to_excel(excel_data)
-        except Exception as e:
-            messagebox.showwarning("Excel Error", f"Failed to write to Excel:\n{e}")
+        threading.Thread(target=self.background_excel_save, args=(excel_data,), daemon=True).start()
 
         self.lbl_status.config(text=f"Saved successfully: {sb_id}", fg=SUCCESS_COLOR)
         self.after(7000, lambda: self.lbl_status.config(text=""))
@@ -2124,13 +2246,13 @@ class TraceabilityApp(tk.Tk):
         for item in self.tree_records.get_children():
             self.tree_records.delete(item)
             
-        query = "SELECT sub_batch_id, pn_sf, part_sf, quantity, shift_sp, station, dt_sp, status FROM records WHERE 1=1"
+        query = "SELECT sub_batch_id, pn_sf, part_sf, quantity, shift_sp, station, op_id, dt_sp, status FROM records WHERE 1=1"
         params = []
         
         search = self.var_rec_search.get()
         if search:
-            query += " AND (sub_batch_id LIKE ? OR pn_sf LIKE ? OR part_sf LIKE ?)"
-            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+            query += " AND (sub_batch_id LIKE ? OR pn_sf LIKE ? OR part_sf LIKE ? OR op_id LIKE ?)"
+            params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
             
         shift = self.cb_rec_shift.get()
         if shift != "All":
@@ -2224,262 +2346,7 @@ class TraceabilityApp(tk.Tk):
         else:
             messagebox.showerror("Error", f"Record not found: {sb_id}")
 
-    def on_scan_enter(self, event):
-        qr_data = self.var_scan_input.get()
-        if qr_data:
-            self.process_qr_data(qr_data)
-            self.var_scan_input.set("")
 
-    def upload_qr_image(self):
-        file_path = filedialog.askopenfilename(title="Select QR Image", filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp")])
-        if file_path:
-            img = cv2.imread(file_path)
-            detector = cv2.QRCodeDetector()
-            data, bbox, _ = detector.detectAndDecode(img)
-            if data:
-                self.process_qr_data(data)
-            else:
-                self.lbl_status.config(text="Could not decode any QR code from the selected image.", fg=ERROR_COLOR)
-                self.after(4000, lambda: self.lbl_status.config(text=""))
-
-    def process_qr_data(self, json_str):
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError:
-            self.lbl_status.config(text="Invalid QR code format. Must be valid JSON.", fg=ERROR_COLOR)
-            self.after(4000, lambda: self.lbl_status.config(text=""))
-            self.var_scan_input.set("")
-            return
-
-        rm_pn = data.get("rm1_pn", "")
-        if not rm_pn:
-            self.lbl_status.config(text="QR data does not contain 'rm1_pn'.", fg=ERROR_COLOR)
-            self.after(4000, lambda: self.lbl_status.config(text=""))
-            self.var_scan_input.set("")
-            return
-            
-        rm_pn_list = [
-            data.get("rm1_pn", ""), data.get("rm2_pn", ""),
-            data.get("rm3_pn", ""), data.get("rm4_pn", "")
-        ]
-        rm_pn_list = [r.strip() for r in rm_pn_list if r and r.strip()]
-
-        # Filter SF dropdown based on the RM PN
-        compatible_sfs = []
-        for sf, info in SF_DATA.items():
-            rm_list = info[1]
-            if any(rm[0] in rm_pn_list for rm in rm_list):
-                compatible_sfs.append(sf)
-
-        target_sf = data.get("full_pn_sf", "")
-        
-        if not compatible_sfs:
-            self.lbl_status.config(text=f"RM PN '{rm_pn}' not found in known SF.", fg=ERROR_COLOR)
-            self.after(4000, lambda: self.lbl_status.config(text=""))
-            self.cb_sf_pn.set("")
-            self.var_part_sf.set("")
-            self.cb_sf_pn['values'] = list(SF_DATA.keys())
-        else:
-            self.cb_sf_pn['values'] = compatible_sfs
-            if target_sf and target_sf in compatible_sfs:
-                self.cb_sf_pn.set(target_sf)
-            else:
-                self.cb_sf_pn.set(compatible_sfs[0])
-            self.on_sf_selected(None)
-
-        self.var_b1.set(data.get("batch_no_1", ""))
-        self.var_b2.set(data.get("batch_no_2", ""))
-        self.var_b3.set(data.get("batch_no_3", ""))
-        
-        self.var_qty.set(str(data.get("quantity", "")))
-        
-        shift_sp = data.get("sub_process_shift", "")
-        if shift_sp in ["A", "B", "C"]:
-            self.cb_shift_sp.set(shift_sp)
-            
-        self.var_op_id.set(data.get("op_id", ""))
-        
-        station = data.get("station", "")
-        if station in ["S06", "S07", "S10", "S11"]:
-            self.cb_station.set(station)
-            
-        dt_sp_str = data.get("sub_process_datetime", "")
-        if dt_sp_str:
-            try:
-                dt_sp = datetime.datetime.strptime(dt_sp_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                try:
-                    dt_sp = datetime.datetime.strptime(dt_sp_str, "%Y-%m-%d %H:%M")
-                except ValueError:
-                    dt_sp = None
-            if dt_sp:
-                self.de_sp.set_date(dt_sp.date())
-                self.h_sp.delete(0, "end"); self.h_sp.insert(0, f"{dt_sp.hour:02d}")
-                self.m_sp.delete(0, "end"); self.m_sp.insert(0, f"{dt_sp.minute:02d}")
-                
-        dt_line_str = data.get("production_line_entry_datetime", "")
-        if dt_line_str:
-            try:
-                dt_line = datetime.datetime.strptime(dt_line_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                try:
-                    dt_line = datetime.datetime.strptime(dt_line_str, "%Y-%m-%d %H:%M")
-                except ValueError:
-                    dt_line = None
-            if dt_line:
-                self.de_line.set_date(dt_line.date())
-                self.h_line.delete(0, "end"); self.h_line.insert(0, f"{dt_line.hour:02d}")
-                self.m_line.delete(0, "end"); self.m_line.insert(0, f"{dt_line.minute:02d}")
-                
-        shift_line = data.get("production_line_shift", "")
-        if shift_line in ["A", "B", "C"]:
-            self.cb_shift_line.set(shift_line)
-            
-        self.txt_remarks.delete("1.0", tk.END)
-        self.txt_remarks.insert(tk.END, data.get("remarks", ""))
-
-        self.update_sub_batch_preview()
-        
-        # Highlight success
-        self.lbl_status.config(text="QR Data Loaded Successfully!", fg=SUCCESS_COLOR)
-        self.after(3000, lambda: self.lbl_status.config(text=""))
-
-    def pl_on_rm_scanned(self, event):
-        scanned_rm = self.pl_var_scan_rm.get().strip()
-        for widget in getattr(self, 'rm_container_t4', tk.Frame()).winfo_children():
-            widget.destroy()
-        self.rm_vars_t4 = []
-        self.pl_var_sf_pn.set("")
-        self.pl_var_part_sf.set("")
-        
-        if hasattr(self, 'pl_lbl_status'):
-            self.pl_lbl_status.config(text="")
-        
-        if not scanned_rm:
-            return
-            
-        matched_sf_pn = None
-        matched_sf_name = None
-        matched_rm_list = None
-        
-        for sf_pn, (sf_name, rm_list) in SF_DATA.items():
-            if rm_list and rm_list[0][0] == scanned_rm:
-                matched_sf_pn = sf_pn
-                matched_sf_name = sf_name
-                matched_rm_list = rm_list
-                break
-                
-        if matched_sf_pn:
-            self.pl_var_sf_pn.set(matched_sf_pn)
-            self.pl_var_part_sf.set(matched_sf_name)
-            if hasattr(self, 'pl_lbl_status'):
-                self.pl_lbl_status.config(text="Match Found!", fg=SUCCESS_COLOR)
-                self.after(3000, lambda: getattr(self, 'pl_lbl_status', tk.Label()).config(text=""))
-            
-            for idx, (rm_id, rm_name) in enumerate(matched_rm_list):
-                ttk.Label(self.rm_container_t4, text=f"RM {idx+1} Ref ★", font=HMI_FONT_S).grid(row=idx, column=0, sticky="w", padx=5, pady=2)
-                cb_var = tk.StringVar(value=rm_id)
-                cb = ttk.Entry(self.rm_container_t4, textvariable=cb_var, state="readonly", width=25)
-                cb.grid(row=idx, column=1, sticky="w", padx=5, pady=2)
-                
-                ttk.Label(self.rm_container_t4, text=f"RM {idx+1} Name", font=HMI_FONT_S).grid(row=idx, column=2, sticky="w", padx=15, pady=2)
-                name_var = tk.StringVar(value=rm_name)
-                ttk.Entry(self.rm_container_t4, textvariable=name_var, state="readonly", width=25).grid(row=idx, column=3, sticky="w", padx=5, pady=2)
-                
-                self.rm_vars_t4.append((cb_var, name_var))
-        else:
-            if hasattr(self, 'pl_lbl_status'):
-                self.pl_lbl_status.config(text="Mismatch! Invalid RM Barcode.", fg=ERROR_COLOR)
-                self.after(4000, lambda: getattr(self, 'pl_lbl_status', tk.Label()).config(text=""))
-            self.pl_var_scan_rm.set("")
-
-    def clear_pl_form(self):
-        if hasattr(self, 'pl_var_scan_rm'): self.pl_var_scan_rm.set("")
-        if hasattr(self, 'pl_var_sf_pn'): self.pl_var_sf_pn.set("")
-        self.pl_var_part_sf.set("")
-        for widget in getattr(self, "rm_container_t4", tk.Frame()).winfo_children():
-            widget.destroy()
-        self.rm_vars_t4 = []
-        self.pl_var_b1.set("")
-        self.pl_var_b2.set("")
-        self.pl_var_b3.set("")
-        self.pl_var_qty.set("")
-        self.pl_var_op_id.set("")
-        self.pl_cb_station.set("")
-        self.pl_cb_shift_sp.set("")
-        now = datetime.datetime.now()
-        self.pl_de_sp.set_date(now.date())
-        self.pl_h_sp.delete(0, "end"); self.pl_h_sp.insert(0, f"{now.hour:02d}")
-        self.pl_m_sp.delete(0, "end"); self.pl_m_sp.insert(0, f"{now.minute:02d}")
-        self.pl_de_line.set_date(now.date())
-        self.pl_h_line.delete(0, "end"); self.pl_h_line.insert(0, f"{now.hour:02d}")
-        self.pl_m_line.delete(0, "end"); self.pl_m_line.insert(0, f"{now.minute:02d}")
-        self.pl_cb_shift_line.set("")
-        self.pl_txt_remarks.delete("1.0", tk.END)
-
-    def print_standalone_label(self):
-        sf_pn = getattr(self, 'pl_var_sf_pn', tk.StringVar()).get()
-        qty_str = self.pl_var_qty.get()
-        op_id = self.pl_var_op_id.get()
-        station = self.pl_cb_station.get()
-        shift_sp = self.pl_cb_shift_sp.get()
-        
-        if not all([sf_pn, qty_str, op_id, station, shift_sp]) or not self.rm_vars_t4:
-            messagebox.showerror("Error", "Please fill all required fields (★).")
-            return
-            
-        if not any([self.pl_var_b1.get().strip(), self.pl_var_b2.get().strip(), self.pl_var_b3.get().strip()]):
-            messagebox.showerror("Error", "Please provide at least one Batch Number.")
-            return
-            
-        rm_pns = [""] * 4
-        rm_names = [""] * 4
-        for idx, (cb_var, name_var) in enumerate(self.rm_vars_t4):
-            if not cb_var.get():
-                messagebox.showerror("Error", "Please fill all RM Reference fields.")
-                return
-            if idx < 4:
-                rm_pns[idx] = cb_var.get()
-                rm_names[idx] = name_var.get()
-
-        dt_sp = f"{self.pl_de_sp.get_date()} {self.pl_h_sp.get()}:{self.pl_m_sp.get()}:00"
-        dt_line = f"{self.pl_de_line.get_date()} {self.pl_h_line.get()}:{self.pl_m_line.get()}:00"
-        
-        try:
-            qty = int(qty_str)
-        except ValueError:
-            messagebox.showerror("Error", "Quantity must be a valid integer.")
-            return
-
-        sb_id = f"PL{dt_sp.replace('-', '').replace(':', '').replace(' ', '')}{self.pl_cb_station.get()}{self.pl_cb_shift_sp.get()}"
-
-        record_data = {
-            'sub_batch_id': sb_id,
-            'pn_sf': sf_pn,
-            'part_sf': self.pl_var_part_sf.get(),
-            'rm1_pn': rm_pns[0],
-            'rm1_name': rm_names[0],
-            'rm2_pn': rm_pns[1],
-            'rm2_name': rm_names[1],
-            'rm3_pn': rm_pns[2],
-            'rm3_name': rm_names[2],
-            'rm4_pn': rm_pns[3],
-            'rm4_name': rm_names[3],
-            'batch1': self.pl_var_b1.get(),
-            'batch2': self.pl_var_b2.get(),
-            'batch3': self.pl_var_b3.get(),
-            'quantity': qty,
-            'shift_sp': self.pl_cb_shift_sp.get(),
-            'op_id': self.pl_var_op_id.get(),
-            'station': self.pl_cb_station.get(),
-            'dt_sp': dt_sp,
-            'dt_line': dt_line,
-            'shift_line': self.pl_cb_shift_line.get(),
-            'remarks': self.pl_txt_remarks.get("1.0", "end-1c"),
-            'status': 'Standalone Print'
-        }
-        
-        print_html_slip(record_data)
     def style_ax(self, ax, title):
         ax.set_facecolor(SURFACE_COLOR)
         ax.tick_params(colors=TEXT_COLOR)
@@ -2558,7 +2425,6 @@ class TraceabilityApp(tk.Tk):
         self.kpi_date_entry.pack(side=tk.LEFT, padx=10)
         
         ttk.Button(controls_frame, text="Refresh KPIs", style="Primary.TButton", command=self.refresh_kpis).pack(side=tk.LEFT, padx=10)
-        ttk.Button(controls_frame, text="Export to Excel", style="Success.TButton", command=self.export_kpis_to_excel).pack(side=tk.LEFT, padx=10)
         
         # Style all figures
         for fig, ax, title in [(self.fig_hourly, self.ax_hourly, "Hourly Production"),
@@ -2580,18 +2446,22 @@ class TraceabilityApp(tk.Tk):
         try:
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
+            
             if hasattr(self, 'kpi_date_entry'):
-                today_str = self.kpi_date_entry.get_date().strftime("%Y-%m-%d")
+                selected_date = self.kpi_date_entry.get_date()
             else:
-                today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+                selected_date = datetime.datetime.now().date()
+                
+            start_dt = selected_date.strftime("%Y-%m-%d 06:00:00")
+            end_dt = (selected_date + datetime.timedelta(days=1)).strftime("%Y-%m-%d 05:59:59")
             
             # 1. Total Daily Production
-            c.execute("SELECT SUM(quantity) FROM records WHERE created_at LIKE ?", (f"{today_str}%",))
+            c.execute("SELECT SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ?", (start_dt, end_dt, self.app_user_shift))
             total_daily = c.fetchone()[0] or 0
             self.lbl_kpi_total.config(text=f"Daily Total: {total_daily}")
             
             # 2. Top Operator
-            c.execute("SELECT op_id, SUM(quantity) as q FROM records WHERE created_at LIKE ? GROUP BY op_id ORDER BY q DESC LIMIT 1", (f"{today_str}%",))
+            c.execute("SELECT op_id, SUM(quantity) as q FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY op_id ORDER BY q DESC LIMIT 1", (start_dt, end_dt, self.app_user_shift))
             top_op = c.fetchone()
             top_op_txt = f"{top_op[0]} ({top_op[1]})" if top_op else "-"
             self.lbl_kpi_top_op.config(text=f"Top Operator: {top_op_txt}")
@@ -2600,7 +2470,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_hourly.clear()
             self.style_ax(self.ax_hourly, "Hourly Production")
             
-            c.execute("SELECT substr(created_at, 12, 2) as hr, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY hr", (f"{today_str}%",))
+            c.execute("SELECT substr(dt_sp, 12, 2) as hr, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY hr", (start_dt, end_dt, self.app_user_shift))
             hourly_data = {row[0]: (row[1] or 0) for row in c.fetchall() if row[0] is not None}
             hrs = [f"{h:02d}" for h in range(24)]
             qts = [hourly_data.get(h, 0) for h in hrs]
@@ -2620,7 +2490,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_shift.clear()
             self.style_ax(self.ax_shift, "Shift Output")
             
-            c.execute("SELECT shift_sp, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY shift_sp", (f"{today_str}%",))
+            c.execute("SELECT shift_sp, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? GROUP BY shift_sp", (start_dt, end_dt))
             shift_dict = {row[0]: (row[1] or 0) for row in c.fetchall() if row[0] is not None}
             shifts = ["A", "B", "C"]
             sqts = [shift_dict.get(s, 0) for s in shifts]
@@ -2638,7 +2508,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_op.clear()
             self.style_ax(self.ax_op, "Operator Mix")
             
-            c.execute("SELECT op_id, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY op_id", (f"{today_str}%",))
+            c.execute("SELECT op_id, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY op_id", (start_dt, end_dt, self.app_user_shift))
             op_data = c.fetchall()
             if op_data:
                 ops = [row[0] for row in op_data]
@@ -2650,7 +2520,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_pn.clear()
             self.style_ax(self.ax_pn, "Product Mix")
             
-            c.execute("SELECT pn_sf, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 5", (f"{today_str}%",))
+            c.execute("SELECT pn_sf, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 5", (start_dt, end_dt, self.app_user_shift))
             pn_data = c.fetchall()
             if pn_data:
                 pns = [row[0] for row in pn_data]
@@ -2664,90 +2534,164 @@ class TraceabilityApp(tk.Tk):
 
     def export_kpis_to_excel(self):
         try:
-            if hasattr(self, 'kpi_date_entry'):
-                today_str = self.kpi_date_entry.get_date().strftime("%Y-%m-%d")
-            else:
-                today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-                
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
             
-            c.execute("SELECT SUM(quantity) FROM records WHERE created_at LIKE ?", (f"{today_str}%",))
-            total_daily = c.fetchone()[0] or 0
+            # Production day logic (06:00 to 05:59)
+            prod_date_sql = "CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END"
             
-            c.execute("SELECT op_id, SUM(quantity) as q FROM records WHERE created_at LIKE ? GROUP BY op_id ORDER BY q DESC LIMIT 1", (f"{today_str}%",))
-            top_op = c.fetchone()
-            top_op_txt = f"{top_op[0]} ({top_op[1]})" if top_op else "-"
+            c.execute(f"SELECT DISTINCT {prod_date_sql} as prod_date FROM records ORDER BY prod_date DESC")
+            dates = [r[0] for r in c.fetchall() if r[0]]
             
-            c.execute("SELECT substr(created_at, 12, 2) as hr, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY hr", (f"{today_str}%",))
-            hourly_data = c.fetchall()
-            
-            c.execute("SELECT shift_sp, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY shift_sp", (f"{today_str}%",))
-            shift_data = c.fetchall()
-            
-            c.execute("SELECT op_id, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY op_id", (f"{today_str}%",))
-            op_data = c.fetchall()
-            
-            c.execute("SELECT pn_sf, SUM(quantity) FROM records WHERE created_at LIKE ? GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 5", (f"{today_str}%",))
-            pn_data = c.fetchall()
-            conn.close()
+            c.execute("SELECT SUM(quantity) FROM records")
+            grand_total = c.fetchone()[0] or 0
 
             if not os.path.exists(EXCEL_FILE):
                 wb = Workbook()
                 ws = wb.active
-                ws.title = "KPI Reports"
+                ws.title = "Advanced KPI Reports"
             else:
                 wb = load_workbook(EXCEL_FILE)
-                if "KPI Reports" in wb.sheetnames:
-                    ws = wb["KPI Reports"]
+                if "Advanced KPI Reports" in wb.sheetnames:
+                    ws = wb["Advanced KPI Reports"]
                     ws.delete_rows(1, ws.max_row)
                 else:
-                    ws = wb.create_sheet("KPI Reports")
+                    ws = wb.create_sheet("Advanced KPI Reports")
+                    
+                # Clean up old sheet if exists
+                if "KPI Reports" in wb.sheetnames:
+                    del wb["KPI Reports"]
             
-            header_font = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+            # Define Styles
+            header_font = Font(name='Segoe UI', size=16, bold=True, color="FFFFFF")
             header_fill = PatternFill(start_color="1B232C", end_color="1B232C", fill_type="solid")
-            data_font = Font(name='Calibri', size=11, color="000000")
-            align = Alignment(horizontal="center", vertical="center")
+            
+            date_font = Font(name='Segoe UI', size=14, bold=True, color="FFFFFF")
+            date_fill = PatternFill(start_color="0078D7", end_color="0078D7", fill_type="solid")
+            
+            sub_header_font = Font(name='Segoe UI', size=11, bold=True, color="FFFFFF")
+            sub_header_fill = PatternFill(start_color="28A745", end_color="28A745", fill_type="solid")
+            
+            data_font = Font(name='Segoe UI', size=11, color="000000")
+            bold_data_font = Font(name='Segoe UI', size=11, bold=True, color="000000")
+            
+            align_center = Alignment(horizontal="center", vertical="center")
             thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
             
-            ws.append([f"KPI Report for {today_str}"])
-            ws.cell(row=1, column=1).font = Font(size=14, bold=True)
-            ws.append([])
+            # Main Header
+            ws.merge_cells('A1:K2')
+            top_cell = ws.cell(row=1, column=1, value=f"KPI REPORT | GENERATED: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} | TOTAL ALL-TIME PRODUCTION: {grand_total}")
+            top_cell.font = header_font
+            top_cell.fill = header_fill
+            top_cell.alignment = align_center
             
-            def add_section(title, headers, data):
-                ws.append([title])
-                ws.cell(row=ws.max_row, column=1).font = Font(size=12, bold=True)
-                ws.append(headers)
-                r = ws.max_row
-                for c_idx in range(1, len(headers)+1):
-                    cell = ws.cell(row=r, column=c_idx)
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = align
-                    cell.border = thin_border
-                for row_data in data:
-                    ws.append(row_data)
-                    r = ws.max_row
-                    for c_idx in range(1, len(row_data)+1):
-                        cell = ws.cell(row=r, column=c_idx)
-                        cell.font = data_font
-                        cell.alignment = align
-                        cell.border = thin_border
-                ws.append([])
-
-            add_section("Summary", ["Metric", "Value"], [["Total Production", total_daily], ["Top Operator", top_op_txt]])
-            add_section("Hourly Production", ["Hour", "Production"], [[f"{h[0]}:00", h[1]] for h in hourly_data])
-            add_section("Shift Output", ["Shift", "Production"], [[s[0], s[1]] for s in shift_data])
-            add_section("Operator Mix", ["Operator ID", "Production"], [[o[0], o[1]] for o in op_data])
-            add_section("Product Mix", ["Product Number", "Production"], [[p[0], p[1]] for p in pn_data])
+            current_row = 4
+            
+            for d in dates:
+                c.execute(f"SELECT SUM(quantity) FROM records WHERE {prod_date_sql} = ?", (d,))
+                d_total = c.fetchone()[0] or 0
                 
-            ws.column_dimensions['A'].width = 25
-            ws.column_dimensions['B'].width = 20
+                c.execute(f"SELECT shift_sp, SUM(quantity) FROM records WHERE {prod_date_sql} = ? GROUP BY shift_sp ORDER BY shift_sp", (d,))
+                shifts = c.fetchall()
+                
+                c.execute(f"SELECT op_id, SUM(quantity) as q FROM records WHERE {prod_date_sql} = ? GROUP BY op_id ORDER BY q DESC LIMIT 5", (d,))
+                ops = c.fetchall()
+                
+                c.execute(f"SELECT pn_sf, SUM(quantity) as q FROM records WHERE {prod_date_sql} = ? GROUP BY pn_sf ORDER BY q DESC LIMIT 5", (d,))
+                pns = c.fetchall()
+                
+                c.execute(f"SELECT station, SUM(quantity) as q FROM records WHERE {prod_date_sql} = ? GROUP BY station ORDER BY q DESC LIMIT 5", (d,))
+                stations = c.fetchall()
+                
+                # Date Header
+                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=11)
+                d_cell = ws.cell(row=current_row, column=1, value=f"PRODUCTION DATE: {d}   |   TOTAL DAILY OUTPUT: {d_total}")
+                d_cell.font = date_font
+                d_cell.fill = date_fill
+                d_cell.alignment = align_center
+                current_row += 1
+                
+                # Grid Headers
+                headers = [
+                    (1, "SHIFT", "OUTPUT"),
+                    (4, "TOP 5 OPERATORS", "OUTPUT"),
+                    (7, "TOP 5 PRODUCTS", "OUTPUT"),
+                    (10, "STATIONS", "OUTPUT")
+                ]
+                
+                for col_start, t1, t2 in headers:
+                    ws.cell(row=current_row, column=col_start, value=t1).font = sub_header_font
+                    ws.cell(row=current_row, column=col_start).fill = sub_header_fill
+                    ws.cell(row=current_row, column=col_start).alignment = align_center
+                    ws.cell(row=current_row, column=col_start).border = thin_border
+                    
+                    ws.cell(row=current_row, column=col_start+1, value=t2).font = sub_header_font
+                    ws.cell(row=current_row, column=col_start+1).fill = sub_header_fill
+                    ws.cell(row=current_row, column=col_start+1).alignment = align_center
+                    ws.cell(row=current_row, column=col_start+1).border = thin_border
+                
+                current_row += 1
+                
+                # Grid Data (5 rows)
+                start_data_row = current_row
+                for i in range(5):
+                    # Shift
+                    if i < len(shifts):
+                        ws.cell(row=start_data_row+i, column=1, value=f"Shift {shifts[i][0]}").font = data_font
+                        ws.cell(row=start_data_row+i, column=2, value=shifts[i][1]).font = bold_data_font
+                    else:
+                        ws.cell(row=start_data_row+i, column=1, value="").font = data_font
+                        ws.cell(row=start_data_row+i, column=2, value="").font = data_font
+                        
+                    # Operator
+                    if i < len(ops):
+                        ws.cell(row=start_data_row+i, column=4, value=ops[i][0]).font = data_font
+                        ws.cell(row=start_data_row+i, column=5, value=ops[i][1]).font = bold_data_font
+                    else:
+                        ws.cell(row=start_data_row+i, column=4, value="")
+                        ws.cell(row=start_data_row+i, column=5, value="")
+                        
+                    # Product
+                    if i < len(pns):
+                        ws.cell(row=start_data_row+i, column=7, value=pns[i][0]).font = data_font
+                        ws.cell(row=start_data_row+i, column=8, value=pns[i][1]).font = bold_data_font
+                    else:
+                        ws.cell(row=start_data_row+i, column=7, value="")
+                        ws.cell(row=start_data_row+i, column=8, value="")
+                        
+                    # Station
+                    if i < len(stations):
+                        ws.cell(row=start_data_row+i, column=10, value=stations[i][0]).font = data_font
+                        ws.cell(row=start_data_row+i, column=11, value=stations[i][1]).font = bold_data_font
+                    else:
+                        ws.cell(row=start_data_row+i, column=10, value="")
+                        ws.cell(row=start_data_row+i, column=11, value="")
+                        
+                    # Apply Borders
+                    for c_idx in [1,2,4,5,7,8,10,11]:
+                        ws.cell(row=start_data_row+i, column=c_idx).border = thin_border
+                        ws.cell(row=start_data_row+i, column=c_idx).alignment = align_center
+
+                current_row += 6
+
+            ws.column_dimensions['A'].width = 15
+            ws.column_dimensions['B'].width = 15
+            ws.column_dimensions['C'].width = 3
+            ws.column_dimensions['D'].width = 25
+            ws.column_dimensions['E'].width = 15
+            ws.column_dimensions['F'].width = 3
+            ws.column_dimensions['G'].width = 35
+            ws.column_dimensions['H'].width = 15
+            ws.column_dimensions['I'].width = 3
+            ws.column_dimensions['J'].width = 15
+            ws.column_dimensions['K'].width = 15
             
+            ws.sheet_view.showGridLines = False
+
+            conn.close()
             wb.save(EXCEL_FILE)
-            messagebox.showinfo("Export Success", f"KPI data exported to Excel sheet 'KPI Reports'.")
         except Exception as e:
-            messagebox.showerror("Export Error", f"Failed to export KPIs: {e}")
+            print(f"Background KPI Export Error: {e}")
 
     def open_excel(self):
         if os.path.exists(EXCEL_FILE):
