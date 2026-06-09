@@ -11,6 +11,7 @@ from openpyxl import Workbook, load_workbook
 import sys
 import threading
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import report_generator
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -119,7 +120,7 @@ def load_sf_data():
     global SF_DATA
     SF_DATA = {}
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT pn_sf, name_sf, rms_json FROM products")
         rows = c.fetchall()
@@ -135,7 +136,7 @@ def load_sf_data():
         
         if not SF_DATA:
             SF_DATA = dict(SF_DATA_DEFAULT)
-            conn = sqlite3.connect(DB_FILE)
+            conn = get_db_connection()
             c = conn.cursor()
             for pn, val in SF_DATA.items():
                 c.execute("INSERT INTO products (pn_sf, name_sf, rms_json) VALUES (?, ?, ?)", (pn, val[0], json.dumps(val[1])))
@@ -148,10 +149,36 @@ def load_sf_data():
 
 
 DB_FILE = os.path.join(DATA_DIR, "traceability.db")
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
+    conn.execute('PRAGMA journal_mode=WAL')
+    return conn
+
+import hashlib
+import binascii
+
+def hash_password(password):
+    salt = b"subproc_trace_salt_2026"
+    hash_obj = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+    return binascii.hexlify(hash_obj).decode("utf-8")
+
+def migrate_passwords():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, password FROM auth")
+    rows = c.fetchall()
+    for row in rows:
+        uid, pwd = row
+        if pwd and (len(pwd) != 64 or not all(ch in "0123456789abcdef" for ch in pwd)):
+            hashed = hash_password(pwd)
+            c.execute("UPDATE auth SET password = ? WHERE id = ?", (hashed, uid))
+    conn.commit()
+    conn.close()
 EXCEL_FILE = os.path.join(DATA_DIR, "production_data.xlsx")
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     c = conn.cursor()
     
     c.execute('''
@@ -202,6 +229,8 @@ def init_db():
         conn.commit()
     except Exception as e:
         print("Auth seed error:", e)
+    
+    migrate_passwords()
         
     c.execute("SELECT COUNT(*) FROM products")
     count = c.fetchone()[0]
@@ -250,6 +279,8 @@ def init_db():
     except sqlite3.OperationalError:
         pass
         
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_sub_batch_id ON records(sub_batch_id)")
+        
     conn.commit()
     conn.close()
     
@@ -258,7 +289,7 @@ def init_db():
 
 def save_to_excel(data):
     headers = [
-        "FULL PN° Semi fini", "PART NAME (SF)", 
+        "SB ID", "FULL PN Semi fini", "PART NAME (SF)", 
         "RM PN", "RM Name",
         "Batch No. 1", "Batch No. 2", "Batch No. 3", "Quantity",
         "Work in Sub-Process by Shift", "Op ID", "Station",
@@ -277,7 +308,7 @@ def save_to_excel(data):
         ws.title = "Sub-process fill by TL"
         ws.append(headers)
         
-        for col in range(1, 17):
+        for col in range(1, 18):
             cell = ws.cell(row=1, column=col)
             cell.font = header_font
             cell.fill = header_fill
@@ -293,7 +324,7 @@ def save_to_excel(data):
             ws = wb.create_sheet("Sub-process fill by TL")
             ws.append(headers)
             
-        cell = ws.cell(row=1, column=16)
+        cell = ws.cell(row=1, column=17)
         if cell.value != "Registered by ID":
             cell.value = "Registered by ID"
             cell.font = header_font
@@ -302,16 +333,17 @@ def save_to_excel(data):
             cell.border = thin_border
 
     ws.row_dimensions[1].height = 34
-    widths = [22, 25, 22, 25, 12, 12, 12, 10, 15, 10, 10, 20, 20, 15, 25, 15]
+    widths = [20, 22, 25, 22, 25, 12, 12, 12, 10, 15, 10, 10, 20, 20, 15, 25, 15]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[chr(64 + i)].width = w
     
-    sf_pn = data[0] if data[0] else "-"
-    part_sf = data[1] if data[1] else "-"
+    sb_id = data[0] if data[0] else "-"
+    sf_pn = data[1] if data[1] else "-"
+    part_sf = data[2] if data[2] else "-"
     rms = []
     for i in range(4):
-        rm_pn = data[2 + i*2]
-        rm_name = data[3 + i*2]
+        rm_pn = data[3 + i*2]
+        rm_name = data[4 + i*2]
         if rm_pn:
             rms.append((rm_pn if rm_pn else "-", rm_name if rm_name else "-"))
             
@@ -319,7 +351,7 @@ def save_to_excel(data):
         rms = [("-", "-")]
         
     num_rms = len(rms)
-    rest_data = ["-" if (x == "" or x is None) else x for x in data[10:]]
+    rest_data = ["-" if (x == "" or x is None) else x for x in data[11:]]
     
     start_row = ws.max_row + 1
     end_row = start_row + num_rms - 1
@@ -327,11 +359,11 @@ def save_to_excel(data):
     for i in range(num_rms):
         row_data = []
         if i == 0:
-            row_data.extend([sf_pn, part_sf])
+            row_data.extend([sb_id, sf_pn, part_sf])
             row_data.extend([rms[i][0], rms[i][1]])
             row_data.extend(rest_data)
         else:
-            row_data.extend([None, None])
+            row_data.extend([None, None, None])
             row_data.extend([rms[i][0], rms[i][1]])
             row_data.extend([None] * len(rest_data))
         ws.append(row_data)
@@ -339,7 +371,8 @@ def save_to_excel(data):
     if num_rms > 1:
         ws.merge_cells(start_row=start_row, start_column=1, end_row=end_row, end_column=1)
         ws.merge_cells(start_row=start_row, start_column=2, end_row=end_row, end_column=2)
-        for col in range(5, 17):
+        ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
+        for col in range(6, 18):
             ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
     
     sf_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
@@ -350,21 +383,21 @@ def save_to_excel(data):
     thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     
     for r in range(start_row, end_row + 1):
-        for c in range(1, 17):
+        for c in range(1, 18):
             cell = ws.cell(row=r, column=c)
             cell.font = row_font
             cell.alignment = align
             cell.border = thin_border
-            if c in (1, 2):
+            if c in (1, 2, 3):
                 cell.fill = sf_fill
-            elif c in (3, 4):
+            elif c in (4, 5):
                 cell.fill = rm_fill
             else:
                 cell.fill = rest_fill
             
     wb.save(EXCEL_FILE)
 
-def print_html_slip(record_data):
+def print_html_slip(record_data, silent=False):
     config = {}
     if os.path.exists(CONFIG_FILE):
         try:
@@ -414,7 +447,8 @@ def print_html_slip(record_data):
     zpl.append(f"^FO10,80^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
     
     sb_id_val = format_val(record_data.get('sub_batch_id'))
-    zpl.append(f"^BY2^FO40,115^BCN,40,N,N,N^FD{sb_id_val}^FS")
+    # Use ^FO15 to give more left room, ^BY2, and Auto mode (A) to compress numbers
+    zpl.append(f"^BY2^FO15,120^BCN,50,N,N,N,A^FD{sb_id_val}^FS")
     
     y = 185
     def add_row(label, value, font_size=18, y_inc=20):
@@ -447,13 +481,15 @@ def print_html_slip(record_data):
     dt_line = format_val(record_data.get('dt_line'))[:16] if record_data.get('dt_line') else '-'
     add_row("Line Entry", dt_line)
     
+    printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    add_row("Printed At", printed)
+    
     y += 3
     zpl.append(f"^FO10,{y}^GB460,2,2^FS")
     y += 8
     
     status = format_val(record_data.get('status', '-'))
-    printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    zpl.append(f"^FO10,{y}^A0N,16,16^FB460,1,0,C^FDStatus: {status} | Printed: {printed}\\&^FS")
+    zpl.append(f"^FO10,{y}^A0N,16,16^FB460,1,0,C^FDStatus: {status}\\&^FS")
     y += 18
     
     zpl.append(f"^FO130,{y}^BQN,2,2^FDQA,{json_str}^FS")
@@ -463,20 +499,23 @@ def print_html_slip(record_data):
     
     # Save the ZPL code to a file for preview/debugging
     try:
-        os.makedirs("qr", exist_ok=True)
+        qr_dir = persistent_path("qr")
+        os.makedirs(qr_dir, exist_ok=True)
         sb_id_safe = format_val(record_data.get('sub_batch_id', 'unknown')).replace(":", "").replace("-", "")
-        file_path = os.path.join("qr", f"{sb_id_safe}.zpl")
+        file_path = os.path.join(qr_dir, f"{sb_id_safe}.zpl")
         with open(file_path, "wb") as f:
             f.write(zpl_string)
     except Exception as e:
         print("Could not save ZPL file:", e)
         
     if not printer_name:
-        messagebox.showwarning("Setup Required", "ZPL saved to 'qr' folder. Please configure Zebra Printer in Settings to physically print.")
+        if not silent:
+            messagebox.showwarning("Setup Required", "ZPL saved to 'qr' folder. Please configure Zebra Printer in Settings to physically print.")
         return
         
     if not WIN32_PRINT_AVAILABLE:
-        messagebox.showerror("Error", "pywin32 is not installed. ZPL saved to 'qr' folder, but cannot print. Please run 'pip install pywin32'.")
+        if not silent:
+            messagebox.showerror("Error", "pywin32 is not installed. ZPL saved to 'qr' folder, but cannot print. Please run 'pip install pywin32'.")
         return
     
     try:
@@ -640,9 +679,9 @@ class TraceabilityApp(tk.Tk):
                 return
                 
             try:
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 c = conn.cursor()
-                c.execute("SELECT role FROM auth WHERE id = ? AND password = ?", (uid, upass))
+                c.execute("SELECT role FROM auth WHERE id = ? AND password = ?", (uid, hash_password(upass)))
                 result = c.fetchone()
                 conn.close()
             except Exception as e:
@@ -669,7 +708,7 @@ class TraceabilityApp(tk.Tk):
             self.lbl_header_user.config(text=f"User: {display_name} | Shift: {ushift}")
             
             try:
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 c = conn.cursor()
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 c.execute("INSERT INTO system_access_logs (event_type, user_id, shift, timestamp) VALUES (?, ?, ?, ?)",
@@ -681,7 +720,7 @@ class TraceabilityApp(tk.Tk):
             
             if self.is_admin:
                 if hasattr(self, 'lbl_header_warning'):
-                    self.lbl_header_warning.config(text=f"⚠️ You are {display_name}, Please don't forget to logout!")
+                    self.lbl_header_warning.config(text=f" You are {display_name}, Please don't forget to logout!")
                     self.lbl_header_warning.pack(side=tk.RIGHT, padx=20)
                 if hasattr(self, 'notebook') and hasattr(self, 'tab3'):
                     self.notebook.add(self.tab3, text="KPIs")
@@ -740,7 +779,7 @@ class TraceabilityApp(tk.Tk):
         ent_pass.pack(pady=(0, 15))
         
         tk.Label(left_frame, text="Role:", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_S).pack(anchor="w")
-        cb_role = ttk.Combobox(left_frame, values=["Operator", "Shift Leader", "Supervisor", "Manager"], state="readonly", width=28)
+        cb_role = ttk.Combobox(left_frame, values=["Operator", "Quality OP", "Shift Leader", "Supervisor", "Manager", "Admin"], state="readonly", width=28)
         cb_role.set("Operator")
         cb_role.pack(pady=(0, 20))
         
@@ -765,7 +804,7 @@ class TraceabilityApp(tk.Tk):
             for item in tree.get_children():
                 tree.delete(item)
             try:
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 c = conn.cursor()
                 c.execute("SELECT id, role FROM auth ORDER BY role")
                 for row in c.fetchall():
@@ -782,9 +821,9 @@ class TraceabilityApp(tk.Tk):
                 messagebox.showerror("Error", "ID and Password are required.", parent=top)
                 return
             try:
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 c = conn.cursor()
-                c.execute("INSERT INTO auth (id, password, role) VALUES (?, ?, ?)", (uid, upass, role))
+                c.execute("INSERT INTO auth (id, password, role) VALUES (?, ?, ?)", (uid, hash_password(upass), role))
                 conn.commit()
                 conn.close()
                 ent_id.delete(0, tk.END)
@@ -806,7 +845,7 @@ class TraceabilityApp(tk.Tk):
                 return
             if messagebox.askyesno("Confirm Delete", f"Delete user '{uid}'?", parent=top):
                 try:
-                    conn = sqlite3.connect(DB_FILE)
+                    conn = get_db_connection()
                     c = conn.cursor()
                     c.execute("DELETE FROM auth WHERE id=?", (uid,))
                     conn.commit()
@@ -1040,7 +1079,7 @@ class TraceabilityApp(tk.Tk):
             
             try:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 c = conn.cursor()
                 c.execute("INSERT OR REPLACE INTO products (pn_sf, name_sf, rms_json) VALUES (?, ?, ?)", (pn, name, json.dumps(rms)))
                 
@@ -1075,7 +1114,7 @@ class TraceabilityApp(tk.Tk):
                     
                     try:
                         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        conn = sqlite3.connect(DB_FILE)
+                        conn = get_db_connection()
                         c = conn.cursor()
                         c.execute("DELETE FROM products WHERE pn_sf = ?", (pn,))
                         c.execute("INSERT INTO product_audit_trail (action, pn_sf, details, user_id, shift, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
@@ -1095,10 +1134,10 @@ class TraceabilityApp(tk.Tk):
         btn_frame = tk.Frame(right_frame, bg=BG_COLOR)
         btn_frame.pack(fill=tk.X, pady=15)
         
-        btn_clear = ttk.Button(btn_frame, text="Add New Product ➕", style="Secondary.TButton", command=clear_form)
+        btn_clear = ttk.Button(btn_frame, text="Add New Product ", style="Secondary.TButton", command=clear_form)
         btn_clear.pack(side=tk.LEFT, padx=5)
         
-        btn_unlock = ttk.Button(btn_frame, text="Unlock 🔓", style="Danger.TButton", command=unlock_form)
+        btn_unlock = ttk.Button(btn_frame, text="Unlock ", style="Danger.TButton", command=unlock_form)
         btn_unlock.pack(side=tk.LEFT, padx=5)
         btn_unlock.config(state="disabled")
         
@@ -1170,7 +1209,7 @@ class TraceabilityApp(tk.Tk):
                 tree_access.delete(item)
                 
             try:
-                conn = sqlite3.connect(DB_FILE)
+                conn = get_db_connection()
                 c = conn.cursor()
                 c.execute("SELECT id, action, pn_sf, details, user_id, shift, timestamp FROM product_audit_trail ORDER BY id DESC")
                 for row in c.fetchall():
@@ -1231,7 +1270,7 @@ class TraceabilityApp(tk.Tk):
             if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?", parent=self):
                 if hasattr(self, 'app_user_id') and self.app_user_id:
                     try:
-                        conn = sqlite3.connect(DB_FILE)
+                        conn = get_db_connection()
                         c = conn.cursor()
                         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         c.execute("INSERT INTO system_access_logs (event_type, user_id, shift, timestamp) VALUES (?, ?, ?, ?)",
@@ -1257,7 +1296,9 @@ class TraceabilityApp(tk.Tk):
         self.lbl_header_user = tk.Label(self.header_frame, text="User: - | Shift: -", bg=HEADER_BG, fg=TEXT_MUTED, font=HMI_FONT_S)
         self.lbl_header_user.pack(side=tk.RIGHT, padx=10)
         
-        self.lbl_header_warning = tk.Label(self.header_frame, text="⚠️ Please don't forget to logout!", bg=HEADER_BG, fg=ERROR_COLOR, font=HMI_FONT_M)
+        self.lbl_header_warning = tk.Label(self.header_frame, text=" Please don't forget to logout!", bg=HEADER_BG, fg=ERROR_COLOR, font=HMI_FONT_M)
+        
+        self.lbl_quality_alert = tk.Label(self.header_frame, text=" QUALITY ALERT: High Defect Rate!", bg=HEADER_BG, fg=ERROR_COLOR, font=HMI_FONT_M)
         
         #tk.Label(self.header_frame, text="Developed by Naoufal El Hlou", bg=HEADER_BG, fg="#94A3B8", font=("Segoe UI", 9, "italic")).pack(side=tk.RIGHT, padx=10)
         
@@ -1330,12 +1371,14 @@ class TraceabilityApp(tk.Tk):
         self.tab5 = ttk.Frame(self.notebook)
         self.tab4 = ttk.Frame(self.notebook)
         self.tab2 = ttk.Frame(self.notebook)
+        self.tab_inventory = ttk.Frame(self.notebook)
         self.tab3 = ttk.Frame(self.notebook)
         
         self.notebook.add(self.tab1, text="New Entry")
         self.notebook.add(self.tab5, text="Consume to Line")
         self.notebook.add(self.tab4, text="Search & Reprint")
         self.notebook.add(self.tab2, text="Records")
+        self.notebook.add(self.tab_inventory, text="Live Inventory")
         self.notebook.add(self.tab3, text="KPIs")
         self.notebook.hide(self.tab3)
         
@@ -1343,8 +1386,55 @@ class TraceabilityApp(tk.Tk):
         self.build_tab5()
         self.build_tab4()
         self.build_tab2()
+        self.build_tab_inventory()
         self.build_tab3()
         
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+        self._check_quality_rate()
+        
+    def _on_tab_changed(self, event):
+        try:
+            selected_tab = self.notebook.tab(self.notebook.select(), "text")
+            if selected_tab == "Records":
+                self.refresh_records_treeview()
+            elif selected_tab == "Live Inventory":
+                self.refresh_inventory()
+            elif selected_tab == "KPIs":
+                self.refresh_kpis()
+        except Exception:
+            pass
+            
+    def _check_quality_rate(self):
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            
+            c.execute("SELECT COUNT(*) FROM quality_defects WHERE reported_at LIKE ?", (f"{today}%",))
+            krow = c.fetchone()
+            total_def_today = krow[0] or 0
+            
+            c.execute("SELECT SUM(quantity) FROM records WHERE dt_sp LIKE ?", (f"{today}%",))
+            prod_res = c.fetchone()
+            total_prod = prod_res[0] or 0
+            
+            conn.close()
+            
+            if total_prod > 0:
+                rate = (total_def_today / total_prod) * 100
+                if rate > 3.0:
+                    self.lbl_quality_alert.pack(side=tk.LEFT, padx=20)
+                else:
+                    self.lbl_quality_alert.pack_forget()
+            else:
+                self.lbl_quality_alert.pack_forget()
+        except Exception:
+            pass
+            
+        try:
+            self.after(60000, self._check_quality_rate)
+        except Exception:
+            pass
     def build_tab1(self):
         # Container Split
         top_panel = tk.Frame(self.tab1, bg=BG_COLOR)
@@ -1393,7 +1483,7 @@ class TraceabilityApp(tk.Tk):
         style.configure("Warn.Horizontal.TProgressbar", background=WARNING_COLOR, troughcolor=BG_COLOR, thickness=15)
         style.configure("Danger.Horizontal.TProgressbar", background=ERROR_COLOR, troughcolor=BG_COLOR, thickness=15)
         
-        self.lbl_scroll_indicator = tk.Label(self.t1_left, text="▼ Scroll down for more refs ▼", bg=BG_COLOR, fg=TEXT_MUTED, font=HMI_FONT_S)
+        self.lbl_scroll_indicator = tk.Label(self.t1_left, text=" Scroll down for more refs ", bg=BG_COLOR, fg=TEXT_MUTED, font=HMI_FONT_S)
         # Quick Search
         _, search_frame = self.create_card(self.t1_left, "Quick Search")
         self.sv_search = tk.StringVar()
@@ -1402,7 +1492,7 @@ class TraceabilityApp(tk.Tk):
         search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
         self.lbl_search_count = tk.Label(search_frame, text="30", fg=ACCENT_COLOR, bg=BG_COLOR)
         self.lbl_search_count.pack(side=tk.LEFT, padx=5)
-        ttk.Button(search_frame, text="✕", width=3, command=lambda: self.sv_search.set("")).pack(side=tk.LEFT)
+        ttk.Button(search_frame, text="", width=3, command=lambda: self.sv_search.set("")).pack(side=tk.LEFT)
         
         # Status Label
         self.lbl_status = tk.Label(self.t1_left, text="", bg=BG_COLOR, fg=SUCCESS_COLOR, font=HMI_FONT_M)
@@ -1410,9 +1500,14 @@ class TraceabilityApp(tk.Tk):
         
         btn_frame = tk.Frame(self.t1_left, bg=BG_COLOR)
         btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10, padx=10)
+        
         ttk.Button(btn_frame, text="Save Record", style="Success.TButton", command=self.save_record).pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
-        ttk.Button(btn_frame, text="Same as Last", style="Primary.TButton", command=self.same_as_last).pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
-        ttk.Button(btn_frame, text="Clear Form", style="Secondary.TButton", command=self.clear_form).pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        
+        sub_btn = tk.Frame(btn_frame, bg=BG_COLOR)
+        sub_btn.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        
+        ttk.Button(sub_btn, text="Same as Last", style="Primary.TButton", command=self.same_as_last).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        ttk.Button(sub_btn, text="Clear Form", style="Secondary.TButton", command=self.clear_form).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
         
         # ---------------- BOTTOM PANEL ----------------
         # Recent Records Tree
@@ -1472,7 +1567,7 @@ class TraceabilityApp(tk.Tk):
         self.lbl_scan_rm_status = tk.Label(lf1, text="", bg=SURFACE_COLOR, font=HMI_FONT_S)
         self.lbl_scan_rm_status.grid(row=0, column=2, columnspan=2, sticky="w", padx=10)
         
-        ttk.Label(lf1, text="FULL PN° Semi fini ★", width=32).grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(lf1, text="FULL PN Semi fini ", width=32).grid(row=1, column=0, sticky="w", pady=2)
         self.cb_sf_pn = ttk.Combobox(lf1, state="readonly", width=30)
         self.cb_sf_pn.grid(row=1, column=1, sticky="w", pady=2, padx=5)
         self.cb_sf_pn.bind("<<ComboboxSelected>>", self.on_sf_selected)
@@ -1502,7 +1597,7 @@ class TraceabilityApp(tk.Tk):
         ttk.Entry(b_frame, textvariable=self.var_b2, width=15).pack(side=tk.LEFT, padx=2)
         ttk.Entry(b_frame, textvariable=self.var_b3, width=15).pack(side=tk.LEFT, padx=2)
         
-        ttk.Label(lf2, text="Quantity ★", width=32).grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(lf2, text="Quantity ", width=32).grid(row=1, column=0, sticky="w", pady=2)
         q_frame = tk.Frame(lf2, bg=SURFACE_COLOR)
         q_frame.grid(row=1, column=1, sticky="w", pady=2, padx=5)
         self.var_qty = tk.StringVar()
@@ -1513,18 +1608,18 @@ class TraceabilityApp(tk.Tk):
         # Section 3: Operation Details
         _, lf3 = self.create_card(self.form_frame, "Operation Details")
         
-        ttk.Label(lf3, text="Work in Sub-Process by Shift ★", width=32).grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Label(lf3, text="Work in Sub-Process by Shift ", width=32).grid(row=0, column=0, sticky="w", pady=2)
         self.cb_shift_sp = ttk.Combobox(lf3, values=["A", "B", "C"], state="readonly", width=5)
         self.cb_shift_sp.grid(row=0, column=1, sticky="w", pady=2, padx=5)
         self.cb_shift_sp.set("")
         self.cb_shift_sp.bind("<<ComboboxSelected>>", lambda e: [self.update_sub_batch_preview(), self.update_stats()])
         
-        ttk.Label(lf3, text="Op ID ★").grid(row=0, column=2, sticky="w", pady=2, padx=10)
+        ttk.Label(lf3, text="Op ID ").grid(row=0, column=2, sticky="w", pady=2, padx=10)
         self.var_op_id = tk.StringVar()
         vcmd_op = (self.register(lambda P: len(P) <= 7 and all(c.isalnum() or c == '-' for c in P)), '%P')
         ttk.Entry(lf3, textvariable=self.var_op_id, width=15, validate="key", validatecommand=vcmd_op).grid(row=0, column=3, sticky="w", pady=2)
         
-        ttk.Label(lf3, text="Station ★").grid(row=0, column=4, sticky="w", pady=2, padx=10)
+        ttk.Label(lf3, text="Station ").grid(row=0, column=4, sticky="w", pady=2, padx=10)
         self.cb_station = ttk.Combobox(lf3, values=["S06", "S07", "S10", "S11"], state="readonly", width=5)
         self.cb_station.grid(row=0, column=5, sticky="w", pady=2)
         self.cb_station.bind("<<ComboboxSelected>>", lambda e: self.update_sub_batch_preview())
@@ -1589,7 +1684,7 @@ class TraceabilityApp(tk.Tk):
         
         _, card = self.create_card(main_frame, "Scan Box Label")
         
-        ttk.Label(card, text="Scan Sub-Batch ID (SB_ID) ★", font=HMI_FONT_M).pack(pady=10)
+        ttk.Label(card, text="Scan Sub-Batch ID (SB_ID) ", font=HMI_FONT_M).pack(pady=10)
         self.var_consume_scan = tk.StringVar()
         entry_scan = ttk.Entry(card, textvariable=self.var_consume_scan, width=40, font=HMI_FONT_L)
         entry_scan.pack(pady=10)
@@ -1648,9 +1743,23 @@ class TraceabilityApp(tk.Tk):
 
         dt_line = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
-        c.execute("SELECT id, status, dt_sp FROM records WHERE sub_batch_id = ?", (sb_id,))
+        
+        # Check Quality Quarantine Status
+        try:
+            c.execute("SELECT is_quarantined FROM quality_defects WHERE sub_batch_id=?", (sb_id,))
+            q_row = c.fetchone()
+            if q_row and q_row[0] == 1:
+                self.lbl_consume_status.config(text="")
+                messagebox.showerror("Quarantined Box", f" BLOCKED!\n\nBox {sb_id} is quarantined by Quality Department and CANNOT be consumed to the line.", parent=self)
+                conn.close()
+                self.var_consume_scan.set("")
+                return
+        except sqlite3.OperationalError:
+            pass
+
+        c.execute("SELECT id, status, dt_sp, pn_sf FROM records WHERE sub_batch_id = ?", (sb_id,))
         row = c.fetchone()
         
         if not row:
@@ -1665,18 +1774,32 @@ class TraceabilityApp(tk.Tk):
             return
             
         dt_sp = row[2]
+        pn_sf = row[3]
+        
+        # FIFO Check
+        c.execute("SELECT COUNT(*) FROM records WHERE pn_sf=? AND status='In Rack' AND dt_sp < ?", (pn_sf, dt_sp))
+        older_count = c.fetchone()[0]
+        
+        if older_count > 0:
+            msg = f"FIFO WARNING: There are {older_count} OLDER box(es) of {pn_sf} in the rack.\n\nAre you sure you want to consume this newer box?"
+            if not messagebox.askyesno("FIFO Alert", msg, parent=self):
+                conn.close()
+                self.var_consume_scan.set("")
+                self.lbl_consume_status.config(text="Consume cancelled due to FIFO violation.", fg=WARNING_COLOR)
+                return
+                
         c.execute("UPDATE records SET status = 'Consumed', dt_line = ?, shift_line = ? WHERE sub_batch_id = ?", (dt_line, shift, sb_id))
         conn.commit()
         conn.close()
         
-        self.update_excel_record(dt_sp, dt_line, shift)
+        self.update_excel_record(sb_id, dt_line, shift)
         
         self.lbl_consume_status.config(text=f"Success! {sb_id} consumed at {dt_line}", fg=SUCCESS_COLOR)
         self.var_consume_scan.set("")
         self.refresh_records_treeview()
         self.after(5000, lambda: self.lbl_consume_status.config(text=""))
 
-    def update_excel_record(self, dt_sp, dt_line, shift_line):
+    def update_excel_record(self, sb_id, dt_line, shift_line):
         if not os.path.exists(EXCEL_FILE): return
         try:
             from openpyxl import load_workbook
@@ -1685,10 +1808,10 @@ class TraceabilityApp(tk.Tk):
             ws = wb["Sub-process fill by TL"]
             
             for row in range(2, ws.max_row + 1):
-                cell_dt_sp = ws.cell(row=row, column=12).value
-                if cell_dt_sp == dt_sp:
-                    ws.cell(row=row, column=13).value = dt_line
-                    ws.cell(row=row, column=14).value = shift_line
+                cell_sb_id = ws.cell(row=row, column=1).value
+                if cell_sb_id == sb_id:
+                    ws.cell(row=row, column=14).value = dt_line
+                    ws.cell(row=row, column=15).value = shift_line
             wb.save(EXCEL_FILE)
         except Exception as e:
             print("Error updating excel:", e)
@@ -1701,7 +1824,7 @@ class TraceabilityApp(tk.Tk):
         tk.Label(main_frame, text="Search & Reprint Label", bg=BG_COLOR, fg=ACCENT_COLOR, font=HMI_FONT_L).pack(pady=(0, 20))
         
         _, search_card = self.create_card(main_frame, "Search Record")
-        ttk.Label(search_card, text="Scan QR Code or Type SB_ID ★", font=HMI_FONT_M).pack(pady=10)
+        ttk.Label(search_card, text="Scan QR Code or Type SB_ID ", font=HMI_FONT_M).pack(pady=10)
         self.var_reprint_scan = tk.StringVar()
         entry_scan = ttk.Entry(search_card, textvariable=self.var_reprint_scan, width=40, font=HMI_FONT_L)
         entry_scan.pack(pady=10)
@@ -1743,7 +1866,7 @@ class TraceabilityApp(tk.Tk):
             
         self.var_reprint_scan.set(sb_id)
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         c.execute("SELECT * FROM records WHERE sub_batch_id = ?", (sb_id,))
@@ -1858,12 +1981,10 @@ class TraceabilityApp(tk.Tk):
             self.tree_records.heading(c, text=c, command=lambda _c=c: self.sort_treeview(self.tree_records, _c, False))
             self.tree_records.column(c, width=100)
             
-        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree_records.yview)
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree_records.xview)
-        self.tree_records.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.tree_records.configure(xscrollcommand=hsb.set)
         
         self.tree_records.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
         hsb.grid(row=1, column=0, sticky="ew")
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
@@ -1873,8 +1994,11 @@ class TraceabilityApp(tk.Tk):
         self.tree_records.tag_configure("odd", background="#1B232C")
         self.tree_records.bind("<Double-1>", lambda e: self.print_selected_record())
 
+        self.page_frame = tk.Frame(self.tab2, bg=BG_COLOR)
+        self.page_frame.pack(fill=tk.X, pady=5)
+
     def get_dashboard_data(self):
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         
         now = datetime.datetime.now()
@@ -1908,10 +2032,81 @@ class TraceabilityApp(tk.Tk):
 
 
     def update_clock(self):
-        now = datetime.datetime.now()
-        self.lbl_clock.config(text=now.strftime("%H:%M:%S"))
-        self.lbl_date.config(text=now.strftime("%Y-%m-%d"))
+        try:
+            now = datetime.datetime.now()
+            self.lbl_clock.config(text=now.strftime("%H:%M:%S"))
+            self.lbl_date.config(text=now.strftime("%Y-%m-%d"))
+            self._check_shift_end_reports(now)
+        except Exception:
+            pass
         self.after(1000, self.update_clock)
+
+    def _check_shift_end_reports(self, now):
+        try:
+            wd = now.weekday() # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+            h = now.hour
+            m = now.minute
+            
+            trigger = False
+            shift_label = ""
+            start_dt = ""
+            end_dt = now.strftime("%Y-%m-%d %H:%M:00")
+            
+            if wd in [0, 1, 2, 3, 5]:
+                if h == 14 and m == 0:
+                    trigger = True; shift_label = "Morning Shift"
+                    start_dt = now.strftime("%Y-%m-%d 06:00:00")
+                elif h == 22 and m == 0:
+                    trigger = True; shift_label = "Evening Shift"
+                    start_dt = now.strftime("%Y-%m-%d 14:00:00")
+                elif h == 6 and m == 0:
+                    trigger = True; shift_label = "Night Shift"
+                    if wd == 0:
+                        start_dt = (now - datetime.timedelta(hours=8)).strftime("%Y-%m-%d 22:00:00")
+                    elif wd == 5:
+                        start_dt = now.strftime("%Y-%m-%d 00:00:00") # Sat 06:00 (Friday night ends)
+                    else:
+                        start_dt = (now - datetime.timedelta(hours=8)).strftime("%Y-%m-%d 22:00:00")
+                        
+            elif wd == 4: # Friday
+                if h == 6 and m == 0:
+                    trigger = True; shift_label = "Night Shift"
+                    start_dt = now.strftime("%Y-%m-%d 00:00:00")
+                elif h == 12 and m == 0:
+                    trigger = True; shift_label = "Morning Shift"
+                    start_dt = now.strftime("%Y-%m-%d 06:00:00")
+                elif h == 18 and m == 30:
+                    trigger = True; shift_label = "Evening Shift"
+                    start_dt = now.strftime("%Y-%m-%d 12:00:00")
+                    
+            if trigger:
+                key = f"{now.strftime('%Y-%m-%d')}_{h:02d}{m:02d}"
+                
+                last_key_file = os.path.join(DATA_DIR, "last_report.json")
+                persisted_key = ""
+                try:
+                    if os.path.exists(last_key_file):
+                        with open(last_key_file, "r") as f:
+                            persisted_key = json.load(f).get("last_pdf_report_key", "")
+                except Exception:
+                    pass
+                
+                if persisted_key != key and getattr(self, 'last_pdf_report_key', '') != key:
+                    self.last_pdf_report_key = key
+                    try:
+                        with open(last_key_file, "w") as f:
+                            json.dump({"last_pdf_report_key": key}, f)
+                    except Exception:
+                        pass
+                        
+                    import threading
+                    try:
+                        import report_generator
+                        threading.Thread(target=report_generator.generate_shift_pdf_report, args=(start_dt, end_dt, shift_label), daemon=True).start()
+                    except Exception as e:
+                        print(f"Failed to trigger PDF report generator: {e}")
+        except Exception as e:
+            print(f"Report Trigger Error: {e}")
 
     def update_stats(self):
         PROD_RATES = {
@@ -1936,7 +2131,7 @@ class TraceabilityApp(tk.Tk):
         if hasattr(self, 'cb_sf_pn'):
             current_pn = self.cb_sf_pn.get()
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         
         # Shift & PN stats
@@ -2059,7 +2254,7 @@ class TraceabilityApp(tk.Tk):
             self.var_part_sf.set(sf_name)
             
             for idx, (rm_id, rm_name) in enumerate(rm_list):
-                ttk.Label(self.rm_container_t1, text=f"RM {idx+1} Ref ★", font=HMI_FONT_S).grid(row=idx, column=0, sticky="w", padx=5, pady=2)
+                ttk.Label(self.rm_container_t1, text=f"RM {idx+1} Ref ", font=HMI_FONT_S).grid(row=idx, column=0, sticky="w", padx=5, pady=2)
                 cb_var = tk.StringVar(value=rm_id)
                 cb = ttk.Entry(self.rm_container_t1, textvariable=cb_var, state="readonly", width=25)
                 cb.grid(row=idx, column=1, sticky="w", padx=5, pady=2)
@@ -2109,7 +2304,7 @@ class TraceabilityApp(tk.Tk):
     def same_as_last(self):
         if hasattr(self, 'var_scan_rm_t1'):
             self.var_scan_rm_t1.set("")
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT * FROM records ORDER BY id DESC LIMIT 1")
         rec = c.fetchone()
@@ -2141,7 +2336,7 @@ class TraceabilityApp(tk.Tk):
         shift_sp = self.cb_shift_sp.get()
         
         if not all([sf_pn, qty_str, op_id, station, shift_sp]) or not self.rm_vars_t1:
-            messagebox.showerror("Error", "Please fill all required fields (★).")
+            messagebox.showerror("Error", "Please fill all required fields ().")
             return
             
         if not any([self.var_b1.get().strip(), self.var_b2.get().strip(), self.var_b3.get().strip()]):
@@ -2169,7 +2364,13 @@ class TraceabilityApp(tk.Tk):
         dt_line = ""
         shift_line = ""
         
-        sb_id = f"SB{dt_sp.replace('-', '').replace(':', '').replace(' ', '')}{station}{shift_sp}"
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        base_sb_id = f"SB{dt_sp.replace('-', '').replace(':', '').replace(' ', '')}{station}{shift_sp[0] if shift_sp else ''}"
+        c.execute("SELECT COUNT(*) FROM records WHERE sub_batch_id LIKE ?", (base_sb_id + "%",))
+        count = c.fetchone()[0]
+        sb_id = f"{base_sb_id}{count+1:02d}"
 
         created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         registered_by = f"{getattr(self, 'app_user_id', '')}"
@@ -2184,23 +2385,33 @@ class TraceabilityApp(tk.Tk):
             'In Rack', created_at, registered_by
         )
 
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO records (
-                sub_batch_id, pn_sf, part_sf, 
-                rm1_pn, rm1_name, rm2_pn, rm2_name,
-                rm3_pn, rm3_name, rm4_pn, rm4_name,
-                batch1, batch2, batch3, quantity,
-                shift_sp, op_id, station, dt_sp, dt_line,
-                shift_line, remarks, status, created_at, registered_by
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        ''', data)
-        conn.commit()
+        try:
+            c.execute('''
+                INSERT INTO records (
+                    sub_batch_id, pn_sf, part_sf, 
+                    rm1_pn, rm1_name, rm2_pn, rm2_name,
+                    rm3_pn, rm3_name, rm4_pn, rm4_name,
+                    batch1, batch2, batch3, quantity,
+                    shift_sp, op_id, station, dt_sp, dt_line,
+                    shift_line, remarks, status, created_at, registered_by
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ''', data)
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            conn.close()
+            messagebox.showerror("Error", "Duplicate Sub-Batch ID detected due to concurrent scans. Please try saving again.")
+            return
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            messagebox.showerror("Error", f"Failed to save record: {e}")
+            return
+            
         conn.close()
         
         excel_data = [
-            sf_pn, self.var_part_sf.get(), 
+            sb_id, sf_pn, self.var_part_sf.get(), 
             rm_pns[0], rm_names[0], rm_pns[1], rm_names[1],
             rm_pns[2], rm_names[2], rm_pns[3], rm_names[3],
             self.var_b1.get(), self.var_b2.get(), self.var_b3.get(), qty,
@@ -2219,6 +2430,19 @@ class TraceabilityApp(tk.Tk):
         self.refresh_records_treeview()
         self.update_sub_batch_preview()
         
+        # Auto-print without preview
+        try:
+            conn_print = get_db_connection()
+            conn_print.row_factory = sqlite3.Row
+            c_print = conn_print.cursor()
+            c_print.execute("SELECT * FROM records WHERE sub_batch_id=?", (sb_id,))
+            row_print = c_print.fetchone()
+            conn_print.close()
+            if row_print:
+                print_html_slip(dict(row_print), silent=True)
+        except Exception as e:
+            print("Auto-print failed:", e)
+        
         # update recent PNs sidebar
         pns = self.recent_pns_listbox.get(0, tk.END)
         if sf_pn not in pns:
@@ -2232,7 +2456,7 @@ class TraceabilityApp(tk.Tk):
         for item in self.tree_recent.get_children():
             self.tree_recent.delete(item)
             
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT sub_batch_id, pn_sf, quantity, shift_sp, station, dt_sp FROM records ORDER BY id DESC LIMIT 5")
         rows = c.fetchall()
@@ -2242,7 +2466,10 @@ class TraceabilityApp(tk.Tk):
             tag = "even" if i % 2 == 0 else "odd"
             self.tree_recent.insert("", "end", values=row, tags=(tag,))
 
-    def refresh_records_treeview(self):
+    def refresh_records_treeview(self, keep_page=False):
+        if not keep_page:
+            self.current_page = 1
+
         for item in self.tree_records.get_children():
             self.tree_records.delete(item)
             
@@ -2266,22 +2493,23 @@ class TraceabilityApp(tk.Tk):
             
         query += " ORDER BY id DESC"
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute(query, params)
         rows = c.fetchall()
         conn.close()
         
-        is_filtered = bool(search) or shift != "All" or station != "All"
         total_count = len(rows)
+        self.records_per_page = 20
+        self.total_pages = (total_count + self.records_per_page - 1) // self.records_per_page if total_count > 0 else 1
         
-        if not is_filtered:
-            limit = total_count % 10
-            if limit == 0 and total_count > 0:
-                limit = 10
-            display_rows = rows[:limit] if total_count > 0 else []
-        else:
-            display_rows = rows
+        self.current_page = getattr(self, 'current_page', 1)
+        if self.current_page > self.total_pages:
+            self.current_page = self.total_pages
+            
+        start_idx = (self.current_page - 1) * self.records_per_page
+        end_idx = start_idx + self.records_per_page
+        display_rows = rows[start_idx:end_idx]
         
         for i, row in enumerate(display_rows):
             tags = ()
@@ -2291,7 +2519,51 @@ class TraceabilityApp(tk.Tk):
                 tags = ("even" if i % 2 == 0 else "odd",)
             self.tree_records.insert("", "end", values=row, tags=tags)
             
-        self.lbl_rec_count.config(text=f"{len(display_rows)} records displayed (Total: {total_count})")
+        start_display = start_idx + 1 if total_count > 0 else 0
+        end_display = min(end_idx, total_count)
+        self.lbl_rec_count.config(text=f"Showing {start_display}-{end_display} of {total_count} records")
+        
+        self.render_pagination()
+
+    def render_pagination(self):
+        for widget in getattr(self, 'page_frame', tk.Frame()).winfo_children():
+            widget.destroy()
+            
+        if not hasattr(self, 'page_frame') or not hasattr(self, 'total_pages') or self.total_pages <= 1:
+            return
+            
+        btn_frame = tk.Frame(self.page_frame, bg=BG_COLOR)
+        btn_frame.pack(anchor="center")
+        
+        def go_page(p):
+            self.current_page = p
+            self.refresh_records_treeview(keep_page=True)
+            
+        if self.current_page > 1:
+            ttk.Button(btn_frame, text="< Prev", command=lambda: go_page(self.current_page - 1), width=6).pack(side=tk.LEFT, padx=2)
+            
+        start_p = max(1, self.current_page - 3)
+        end_p = min(self.total_pages, self.current_page + 3)
+        
+        if start_p > 1:
+            ttk.Button(btn_frame, text="1", command=lambda: go_page(1), width=3).pack(side=tk.LEFT, padx=1)
+            if start_p > 2:
+                tk.Label(btn_frame, text="...", bg=BG_COLOR, fg=TEXT_COLOR).pack(side=tk.LEFT, padx=1)
+                
+        for p in range(start_p, end_p + 1):
+            if p == self.current_page:
+                lbl = tk.Label(btn_frame, text=str(p), bg=ACCENT_COLOR, fg="white", font=("Segoe UI", 10, "bold"), width=3)
+                lbl.pack(side=tk.LEFT, padx=2)
+            else:
+                ttk.Button(btn_frame, text=str(p), command=lambda p=p: go_page(p), width=3).pack(side=tk.LEFT, padx=1)
+                
+        if end_p < self.total_pages:
+            if end_p < self.total_pages - 1:
+                tk.Label(btn_frame, text="...", bg=BG_COLOR, fg=TEXT_COLOR).pack(side=tk.LEFT, padx=1)
+            ttk.Button(btn_frame, text=str(self.total_pages), command=lambda: go_page(self.total_pages), width=3).pack(side=tk.LEFT, padx=1)
+            
+        if self.current_page < self.total_pages:
+            ttk.Button(btn_frame, text="Next >", command=lambda: go_page(self.current_page + 1), width=6).pack(side=tk.LEFT, padx=2)
 
     def reset_records_filter(self):
         self.var_rec_search.set("")
@@ -2323,7 +2595,7 @@ class TraceabilityApp(tk.Tk):
         self.do_print(sb_id)
 
     def print_last_slip(self):
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT sub_batch_id FROM records ORDER BY id DESC LIMIT 1")
         row = c.fetchone()
@@ -2334,7 +2606,7 @@ class TraceabilityApp(tk.Tk):
             messagebox.showinfo("Info", "No records found.")
 
     def do_print(self, sb_id):
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         c.execute("SELECT * FROM records WHERE sub_batch_id=?", (sb_id,))
@@ -2342,10 +2614,131 @@ class TraceabilityApp(tk.Tk):
         conn.close()
         
         if row:
-            print_html_slip(dict(row))
+            record_data = dict(row)
+            
+            preview = tk.Toplevel(self)
+            preview.title("Label Preview")
+            preview.geometry("400x500")
+            preview.configure(bg=BG_COLOR)
+            preview.transient(self)
+            preview.grab_set()
+            
+            tk.Label(preview, text="Label Preview", font=HMI_FONT_L, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
+            
+            details_frame = tk.Frame(preview, bg=SURFACE_COLOR, bd=1, relief="solid")
+            details_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+            
+            details = [
+                ("Sub-Batch ID", record_data.get('sub_batch_id')),
+                ("Part Number", record_data.get('pn_sf')),
+                ("Part Name", record_data.get('part_sf')),
+                ("Quantity", record_data.get('quantity')),
+                ("Operator ID", record_data.get('op_id')),
+                ("Date & Time", record_data.get('dt_sp')),
+            ]
+            
+            for i, (k, v) in enumerate(details):
+                tk.Label(details_frame, text=f"{k}:", font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED).grid(row=i, column=0, sticky="e", padx=10, pady=5)
+                tk.Label(details_frame, text=str(v), font=HMI_FONT_M, bg=SURFACE_COLOR, fg=TEXT_COLOR).grid(row=i, column=1, sticky="w", padx=10, pady=5)
+                
+            btn_frame = tk.Frame(preview, bg=BG_COLOR)
+            btn_frame.pack(fill=tk.X, pady=20)
+            
+            def confirm_print():
+                preview.destroy()
+                print_html_slip(record_data)
+                
+            ttk.Button(btn_frame, text="Print Label", style="Success.TButton", command=confirm_print).pack(side=tk.LEFT, expand=True, padx=10)
+            ttk.Button(btn_frame, text="Cancel", style="Danger.TButton", command=preview.destroy).pack(side=tk.LEFT, expand=True, padx=10)
+            
         else:
             messagebox.showerror("Error", f"Record not found: {sb_id}")
 
+    def build_tab_inventory(self):
+        main_frame = tk.Frame(self.tab_inventory, bg=BG_COLOR)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        tk.Label(main_frame, text="Live Inventory (In Rack)", bg=BG_COLOR, fg=ACCENT_COLOR, font=HMI_FONT_L).pack(pady=(0, 20))
+        
+        # Top: Aggregated View
+        _, agg_card = self.create_card(main_frame, "Summary by Part Number")
+        
+        cols_agg = ("PN", "Part Name", "Total Qty", "Box Count")
+        self.tree_inv_agg = ttk.Treeview(agg_card, columns=cols_agg, show="headings", height=5)
+        for col in cols_agg:
+            self.tree_inv_agg.heading(col, text=col)
+        self.tree_inv_agg.column("PN", width=200)
+        self.tree_inv_agg.column("Part Name", width=300)
+        self.tree_inv_agg.column("Total Qty", width=100)
+        self.tree_inv_agg.column("Box Count", width=100)
+        self.tree_inv_agg.pack(fill=tk.X, pady=10, padx=10)
+        
+        # Bottom: Detailed View (Oldest First)
+        _, det_card = self.create_card(main_frame, "Detailed Rack Content (FIFO)")
+        
+        cols_det = ("SB_ID", "PN", "Qty", "DateTime", "Age", "Status")
+        self.tree_inv_det = ttk.Treeview(det_card, columns=cols_det, show="headings", height=12)
+        for col in cols_det:
+            self.tree_inv_det.heading(col, text=col)
+        self.tree_inv_det.column("SB_ID", width=200)
+        self.tree_inv_det.column("PN", width=200)
+        self.tree_inv_det.column("Qty", width=100)
+        self.tree_inv_det.column("DateTime", width=150)
+        self.tree_inv_det.column("Age", width=100)
+        self.tree_inv_det.column("Status", width=100)
+        
+        self.tree_inv_det.tag_configure("age_green", background="#E8F5E9", foreground="#2E7D32")
+        self.tree_inv_det.tag_configure("age_yellow", background="#FFFDE7", foreground="#D32F2F") # changed to red-ish/dark yellow for visibility
+        
+        scrollbar = ttk.Scrollbar(det_card, orient=tk.VERTICAL, command=self.tree_inv_det.yview)
+        self.tree_inv_det.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree_inv_det.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    def refresh_inventory(self):
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        # Aggregated
+        c.execute('''SELECT pn_sf, part_sf, SUM(quantity), COUNT(*) 
+                     FROM records WHERE status="In Rack" GROUP BY pn_sf''')
+        agg_rows = c.fetchall()
+        
+        # Detailed
+        c.execute('''SELECT sub_batch_id, pn_sf, quantity, dt_sp, status 
+                     FROM records WHERE status="In Rack" ORDER BY dt_sp ASC''')
+        det_rows = c.fetchall()
+        conn.close()
+        
+        # Clear existing
+        for item in self.tree_inv_agg.get_children(): self.tree_inv_agg.delete(item)
+        for item in self.tree_inv_det.get_children(): self.tree_inv_det.delete(item)
+        
+        for row in agg_rows:
+            self.tree_inv_agg.insert("", "end", values=row)
+            
+        now = datetime.datetime.now()
+        for row in det_rows:
+            dt_str = row[3]
+            try:
+                dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                diff = now - dt_obj
+                hours = diff.total_seconds() / 3600
+                days = diff.days
+                
+                age_str = f"{days}d {int(hours % 24)}h"
+                
+                if days > 2:
+                    tag = "age_yellow"
+                else:
+                    tag = "age_green"
+                    
+            except Exception:
+                age_str = "Unknown"
+                tag = "age_green"
+                
+            vals = (row[0], row[1], row[2], row[3], age_str, row[4])
+            self.tree_inv_det.insert("", "end", values=vals, tags=(tag,))
 
     def style_ax(self, ax, title):
         ax.set_facecolor(SURFACE_COLOR)
@@ -2378,7 +2771,7 @@ class TraceabilityApp(tk.Tk):
         self.tab3_scrollbar.pack(side="right", fill="y")
         
         if not MATPLOTLIB_AVAILABLE:
-            tk.Label(self.tab3_scrollable_frame, text="⚠️ Matplotlib is required to view KPIs.\nPlease run 'pip install matplotlib' and restart.", bg=BG_COLOR, fg=ERROR_COLOR, font=HMI_FONT_L).pack(pady=50, padx=50)
+            tk.Label(self.tab3_scrollable_frame, text=" Matplotlib is required to view KPIs.\nPlease run 'pip install matplotlib' and restart.", bg=BG_COLOR, fg=ERROR_COLOR, font=HMI_FONT_L).pack(pady=50, padx=50)
             return
             
         # Top Cards Row
@@ -2424,6 +2817,16 @@ class TraceabilityApp(tk.Tk):
         self.kpi_date_entry = DateEntry(controls_frame, width=12, background=ACCENT_COLOR, foreground='white', borderwidth=2)
         self.kpi_date_entry.pack(side=tk.LEFT, padx=10)
         
+        tk.Label(controls_frame, text="Shift:", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(side=tk.LEFT, padx=10)
+        self.cb_kpi_shift = ttk.Combobox(controls_frame, values=["All", "A", "B", "C"], state="readonly", width=8, font=HMI_FONT_M)
+        self.cb_kpi_shift.pack(side=tk.LEFT, padx=5)
+        
+        user_role = getattr(self, 'app_user_role', 'Operator')
+        if user_role in ["Admin", "Supervisor", "Quality OP"]:
+            self.cb_kpi_shift.set("All")
+        else:
+            self.cb_kpi_shift.set(getattr(self, 'app_user_shift', 'A'))
+        
         ttk.Button(controls_frame, text="Refresh KPIs", style="Primary.TButton", command=self.refresh_kpis).pack(side=tk.LEFT, padx=10)
         
         # Style all figures
@@ -2444,7 +2847,7 @@ class TraceabilityApp(tk.Tk):
             return
             
         try:
-            conn = sqlite3.connect(DB_FILE)
+            conn = get_db_connection()
             c = conn.cursor()
             
             if hasattr(self, 'kpi_date_entry'):
@@ -2455,13 +2858,23 @@ class TraceabilityApp(tk.Tk):
             start_dt = selected_date.strftime("%Y-%m-%d 06:00:00")
             end_dt = (selected_date + datetime.timedelta(days=1)).strftime("%Y-%m-%d 05:59:59")
             
+            shift_filter = getattr(self, 'cb_kpi_shift', None)
+            selected_shift = shift_filter.get() if shift_filter else "All"
+            
+            if selected_shift == "All":
+                shift_cond = ""
+                shift_params = []
+            else:
+                shift_cond = " AND shift_sp = ?"
+                shift_params = [selected_shift]
+            
             # 1. Total Daily Production
-            c.execute("SELECT SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ?", (start_dt, end_dt, self.app_user_shift))
+            c.execute(f"SELECT SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond}", [start_dt, end_dt] + shift_params)
             total_daily = c.fetchone()[0] or 0
             self.lbl_kpi_total.config(text=f"Daily Total: {total_daily}")
             
             # 2. Top Operator
-            c.execute("SELECT op_id, SUM(quantity) as q FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY op_id ORDER BY q DESC LIMIT 1", (start_dt, end_dt, self.app_user_shift))
+            c.execute(f"SELECT op_id, SUM(quantity) as q FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond} GROUP BY op_id ORDER BY q DESC LIMIT 1", [start_dt, end_dt] + shift_params)
             top_op = c.fetchone()
             top_op_txt = f"{top_op[0]} ({top_op[1]})" if top_op else "-"
             self.lbl_kpi_top_op.config(text=f"Top Operator: {top_op_txt}")
@@ -2470,7 +2883,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_hourly.clear()
             self.style_ax(self.ax_hourly, "Hourly Production")
             
-            c.execute("SELECT substr(dt_sp, 12, 2) as hr, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY hr", (start_dt, end_dt, self.app_user_shift))
+            c.execute(f"SELECT substr(dt_sp, 12, 2) as hr, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond} GROUP BY hr", [start_dt, end_dt] + shift_params)
             hourly_data = {row[0]: (row[1] or 0) for row in c.fetchall() if row[0] is not None}
             hrs = [f"{h:02d}" for h in range(24)]
             qts = [hourly_data.get(h, 0) for h in hrs]
@@ -2508,7 +2921,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_op.clear()
             self.style_ax(self.ax_op, "Operator Mix")
             
-            c.execute("SELECT op_id, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY op_id", (start_dt, end_dt, self.app_user_shift))
+            c.execute(f"SELECT op_id, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond} GROUP BY op_id", [start_dt, end_dt] + shift_params)
             op_data = c.fetchall()
             if op_data:
                 ops = [row[0] for row in op_data]
@@ -2520,7 +2933,7 @@ class TraceabilityApp(tk.Tk):
             self.ax_pn.clear()
             self.style_ax(self.ax_pn, "Product Mix")
             
-            c.execute("SELECT pn_sf, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? AND shift_sp = ? GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 5", (start_dt, end_dt, self.app_user_shift))
+            c.execute(f"SELECT pn_sf, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond} GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 5", [start_dt, end_dt] + shift_params)
             pn_data = c.fetchall()
             if pn_data:
                 pns = [row[0] for row in pn_data]
@@ -2534,7 +2947,7 @@ class TraceabilityApp(tk.Tk):
 
     def export_kpis_to_excel(self):
         try:
-            conn = sqlite3.connect(DB_FILE)
+            conn = get_db_connection()
             c = conn.cursor()
             
             # Production day logic (06:00 to 05:59)

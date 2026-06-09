@@ -1,31 +1,37 @@
 @echo off
-cd /d "%~dp0"
-echo ========================================================
-echo Building HI-LEX Sub-Process Traceability Executable
-echo ========================================================
-echo.
+title Building Traceability System Executables
+echo ============================================================
+echo  BUILDING EXECUTABLES
+echo ============================================================
 
-:: Check if PyInstaller is installed
-python -m pip show pyinstaller >nul 2>&1
-if %errorlevel% neq 0 (
-    echo PyInstaller is not installed. Installing now...
-    python -m pip install pyinstaller
+echo.
+echo Installing PyInstaller if needed...
+python -m pip install pyinstaller
+
+echo.
+echo --- Building Main Application ---
+if exist "Sub-Process Traceability.spec" (
+    python -m PyInstaller "Sub-Process Traceability.spec" --clean
+) else (
+    echo Spec file "Sub-Process Traceability.spec" not found.
 )
 
 echo.
-echo Compiling... This may take a minute or two...
-echo.
-
-:: Clean previous builds to avoid cache issues
-if exist build rmdir /s /q build
-if exist "Sub-Process Traceability.spec" del /f /q "Sub-Process Traceability.spec"
-
-:: Run PyInstaller
-python -m PyInstaller --noconsole --onefile --clean --name "Sub-Process Traceability" --distpath "dist" --workpath "build" --add-data "assets;assets" --icon="assets\logo_en.png" --version-file="scripts\file_version_info.txt" "src\main.py"
+echo --- Building Quality Application ---
+if exist "Quality App.spec" (
+    python -m PyInstaller "Quality App.spec" --clean
+) else (
+    echo Spec file "Quality App.spec" not found.
+)
 
 echo.
-echo ========================================================
-echo Build Complete!
-echo You can find your Sub-Process Traceability.exe in the 'dist' folder.
-echo ========================================================
+echo ============================================================
+echo  BUILD COMPLETE
+echo ============================================================
+echo You can find the compiled .exe files inside the "dist" folder.
+echo.
 pause
+Traceback (most recent call last):
+  File "C:\Users\Mr_X\Desktop\Sub-Process Traceability\src\quality_app.py", line 15, in <module>
+    from config import *
+ModuleNotFoundError: No module named 'config'
