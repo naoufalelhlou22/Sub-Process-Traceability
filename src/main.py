@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import sqlite3
 import datetime
 import os
@@ -29,6 +29,12 @@ def persistent_path(relative_path):
         base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     return os.path.join(base_path, relative_path)
 
+def center_window(win, width, height):
+    win.update_idletasks()
+    x = (win.winfo_screenwidth() // 2) - (width // 2)
+    y = (win.winfo_screenheight() // 2) - (height // 2)
+    win.geometry(f"{width}x{height}+{x}+{y}")
+
 try:
     import win32print
     WIN32_PRINT_AVAILABLE = True
@@ -37,9 +43,12 @@ except ImportError:
 
 try:
     import matplotlib # type: ignore
-    matplotlib.use("TkAgg")
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg # type: ignore
+    matplotlib.use("Agg")
+    from matplotlib.backends.backend_agg import FigureCanvasAgg # type: ignore
     from matplotlib.figure import Figure # type: ignore
+    import matplotlib.patches as mpatches
+    from PIL import Image, ImageTk
+    import numpy as np
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -63,8 +72,8 @@ CONFIG_FILE = os.path.join(DATA_DIR, "traceability_config.json")
 APP_VERSION = "1.1.0"
 # Premium Industrial HMI Theme
 
-BG_COLOR = "#0F1419"       # Main Background
-SURFACE_COLOR = "#1B232C"  # Panels & Cards
+BG_COLOR = "#121212"       # Main Background
+SURFACE_COLOR = "#1E1E1E"  # Panels & Cards
 
 ACCENT_COLOR = "#00B4D8"   # Primary Action
 SUCCESS_COLOR = "#2DC653"  # Running / Completed
@@ -221,6 +230,7 @@ def init_db():
     
     try:
         c.executemany("INSERT OR IGNORE INTO auth (id, password, role) VALUES (?, ?, ?)", [
+            ('1', '1', 'Supervisor'),
             ('999', 'hilex999', 'Supervisor'),
             ('998', 'hilex998', 'Shift Leader'),
             ('111', 'hilex111', 'Operator'),
@@ -279,7 +289,45 @@ def init_db():
     except sqlite3.OperationalError:
         pass
         
+    try:
+        c.execute("ALTER TABLE records ADD COLUMN reprint_count INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        c.execute("ALTER TABLE records ADD COLUMN last_reprinted_at TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        c.execute("ALTER TABLE records ADD COLUMN last_reprinted_by TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
     c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_sub_batch_id ON records(sub_batch_id)")
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS shift_targets (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     product_pn TEXT NOT NULL,
+                     shift TEXT NOT NULL,
+                     station TEXT,
+                     target_qty INTEGER NOT NULL,
+                     effective_date TEXT NOT NULL
+                 )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS part_thresholds (
+                     pn_sf TEXT PRIMARY KEY,
+                     min_qty INTEGER NOT NULL DEFAULT 0
+                 )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS inventory_snapshots (
+                     snapshot_date TEXT NOT NULL,
+                     pn_sf TEXT NOT NULL,
+                     boxes_in_rack INTEGER,
+                     total_qty_in_rack INTEGER,
+                     oldest_box_age_hours REAL,
+                     PRIMARY KEY (snapshot_date, pn_sf)
+                 )''')
         
     conn.commit()
     conn.close()
@@ -397,15 +445,7 @@ def save_to_excel(data):
             
     wb.save(EXCEL_FILE)
 
-def print_html_slip(record_data, silent=False):
-    config = {}
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                config = json.load(f)
-        except: pass
-            
-    printer_name = config.get("zebra_printer", "")
+def generate_zpl(record_data):
     qr_payload = {
         "sub_batch_id": record_data.get('sub_batch_id', ''),
         "full_pn_sf": record_data.get('pn_sf', ''),
@@ -437,71 +477,95 @@ def print_html_slip(record_data, silent=False):
 
     zpl = []
     zpl.append("^XA")
-    zpl.append("^PW480")
+    zpl.append("^PW520")
+    zpl.append("^LH25,0")
     zpl.append("^CI28")
     
-    zpl.append("^FO80,20^A0N,24,24^FDSUB-PROCESS RECORD^FS")
-    zpl.append("^FO10,55^GB460,3,3^FS")
-    
-    zpl.append("^FO10,70^GB460,40,40^FS")
-    zpl.append(f"^FO10,80^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
-    
-    sb_id_val = format_val(record_data.get('sub_batch_id'))
-    # Use ^FO15 to give more left room, ^BY2, and Auto mode (A) to compress numbers
-    zpl.append(f"^BY2^FO15,120^BCN,50,N,N,N,A^FD{sb_id_val}^FS")
-    
-    y = 185
-    def add_row(label, value, font_size=18, y_inc=20):
-        nonlocal y
-        zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FD{label}^FS")
-        zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FB460,1,0,R^FD{value}\\&^FS")
-        y += y_inc
+    def draw_layout(offset_y):
+        zpl.append(f"^FO80,{20+offset_y}^A0N,24,24^FDSUB-PROCESS RECORD^FS")
+        zpl.append(f"^FO10,{55+offset_y}^GB460,3,3^FS")
+        
+        zpl.append(f"^FO10,{70+offset_y}^GB460,40,40^FS")
+        zpl.append(f"^FO10,{80+offset_y}^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
+        
+        sb_id_val = format_val(record_data.get('sub_batch_id'))
+        zpl.append(f"^BY2^FO15,{120+offset_y}^BCN,50,N,N,N,A^FD{sb_id_val}^FS")
+        
+        y = 185 + offset_y
+        def add_row(label, value, font_size=18, y_inc=20):
+            nonlocal y
+            zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FD{label}^FS")
+            zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FB460,1,0,R^FD{value}\\&^FS")
+            y += y_inc
 
-    add_row("PN Semi fini", format_val(record_data.get('pn_sf')))
-    add_row("Part Name (SF)", format_val(record_data.get('part_sf')))
-            
-    y += 3
-    zpl.append(f"^FO10,{y}^GB460,1,1^FS")
-    y += 8
+        add_row("PN Semi fini", format_val(record_data.get('pn_sf')))
+        add_row("Part Name (SF)", format_val(record_data.get('part_sf')))
+                
+        y += 3
+        zpl.append(f"^FO10,{y}^GB460,1,1^FS")
+        y += 8
+        
+        add_row("Batch No. 1", format_val(record_data.get('batch1')))
+        add_row("Batch No. 2", format_val(record_data.get('batch2')))
+        add_row("Batch No. 3", format_val(record_data.get('batch3')))
+        add_row("Quantity", f"{format_val(record_data.get('quantity'))} pcs", font_size=20, y_inc=22)
+        
+        y += 3
+        zpl.append(f"^FO10,{y}^GB460,1,1^FS")
+        y += 8
+        
+        add_row("Shift SP", format_val(record_data.get('shift_sp')))
+        add_row("Op ID", format_val(record_data.get('op_id')))
+        add_row("Station", format_val(record_data.get('station')))
+        dt_sp = format_val(record_data.get('dt_sp'))[:16] if record_data.get('dt_sp') else '-'
+        add_row("SP Date/Time", dt_sp)
+        dt_line = format_val(record_data.get('dt_line'))[:16] if record_data.get('dt_line') else '-'
+        add_row("Line Entry", dt_line)
+        
+        printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        add_row("Printed At", printed)
+        
+        y += 3
+        zpl.append(f"^FO10,{y}^GB460,2,2^FS")
+        y += 8
+        
+        reprints = int(record_data.get('reprint_count') or 0)
+        if reprints > 0:
+            last_by = record_data.get('last_reprinted_by', 'Unknown')
+            last_at = record_data.get('last_reprinted_at', '')[:16] if record_data.get('last_reprinted_at') else ''
+            audit_text = f"** REPRINT #{reprints} by {last_by} at {last_at} **"
+            zpl.append(f"^FO10,{y}^A0N,14,14^FB460,1,0,C^FD{audit_text}\\&^FS")
+        else:
+            zpl.append(f"^FO10,{y}^A0N,14,14^FB460,1,0,C^FD-- Original Print --\\&^FS")
+        y += 18
+        
+        zpl.append(f"^FO130,{y}^BQN,2,2^FDQA,{json_str}^FS")
+        return y + 110
+        
+    end_y = draw_layout(0)
     
-    add_row("Batch No. 1", format_val(record_data.get('batch1')))
-    add_row("Batch No. 2", format_val(record_data.get('batch2')))
-    add_row("Batch No. 3", format_val(record_data.get('batch3')))
-    add_row("Quantity", f"{format_val(record_data.get('quantity'))} pcs", font_size=20, y_inc=22)
+    zpl.append(f"^FO10,{end_y}^A0N,20,20^FB460,1,0,C^FD- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -^FS")
     
-    y += 3
-    zpl.append(f"^FO10,{y}^GB460,1,1^FS")
-    y += 8
-    
-    add_row("Shift SP", format_val(record_data.get('shift_sp')))
-    add_row("Op ID", format_val(record_data.get('op_id')))
-    add_row("Station", format_val(record_data.get('station')))
-    dt_sp = format_val(record_data.get('dt_sp'))[:16] if record_data.get('dt_sp') else '-'
-    add_row("SP Date/Time", dt_sp)
-    dt_line = format_val(record_data.get('dt_line'))[:16] if record_data.get('dt_line') else '-'
-    add_row("Line Entry", dt_line)
-    
-    printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    add_row("Printed At", printed)
-    
-    y += 3
-    zpl.append(f"^FO10,{y}^GB460,2,2^FS")
-    y += 8
-    
-    status = format_val(record_data.get('status', '-'))
-    zpl.append(f"^FO10,{y}^A0N,16,16^FB460,1,0,C^FDStatus: {status}\\&^FS")
-    y += 18
-    
-    zpl.append(f"^FO130,{y}^BQN,2,2^FDQA,{json_str}^FS")
-    zpl.append("^PQ2")
+    draw_layout(end_y + 30)
+
+    zpl.append("^PQ1")
     zpl.append("^XZ")
-    zpl_string = "\n".join(zpl).encode("utf-8")
+    return "\n".join(zpl).encode("utf-8")
+
+def execute_zpl_print(zpl_string, record_data, silent=False):
+    config = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                config = json.load(f)
+        except: pass
+            
+    printer_name = config.get("zebra_printer", "")
     
-    # Save the ZPL code to a file for preview/debugging
     try:
         qr_dir = persistent_path("qr")
         os.makedirs(qr_dir, exist_ok=True)
-        sb_id_safe = format_val(record_data.get('sub_batch_id', 'unknown')).replace(":", "").replace("-", "")
+        sb_id_safe = str(record_data.get('sub_batch_id', 'unknown')).replace(":", "").replace("-", "")
         file_path = os.path.join(qr_dir, f"{sb_id_safe}.zpl")
         with open(file_path, "wb") as f:
             f.write(zpl_string)
@@ -526,11 +590,114 @@ def print_html_slip(record_data, silent=False):
             win32print.WritePrinter(hPrinter, zpl_string)
             win32print.EndPagePrinter(hPrinter)
             win32print.EndDocPrinter(hPrinter)
-            messagebox.showinfo("Success", f"Label sent to printer '{printer_name}' successfully!")
+            if not silent:
+                messagebox.showinfo("Success", f"Label sent to printer '{printer_name}' successfully!")
         finally:
             win32print.ClosePrinter(hPrinter)
     except Exception as e:
-        messagebox.showerror("Printer Error", f"Failed to send to printer '{printer_name}':\n{e}")
+        if not silent:
+            messagebox.showerror("Printer Error", f"Failed to send to printer '{printer_name}':\n{e}")
+
+def print_html_slip(record_data, silent=False):
+    zpl_string = generate_zpl(record_data)
+    execute_zpl_print(zpl_string, record_data, silent)
+
+def generate_pick_ticket_zpl(pn, target_qty, accumulated, picked):
+    zpl = []
+    zpl.append("^XA")
+    zpl.append("^PW480")
+    zpl.append("^LH20,0")
+    zpl.append("^CI28")
+    
+    zpl.append("^FO0,30^A0N,30,30^FB440,1,0,C^FDFIFO PICK TICKET^FS")
+    zpl.append("^FO0,70^GB440,3,3^FS")
+    
+    zpl.append(f"^FO5,85^A0N,22,22^FDPart: {pn}^FS")
+    zpl.append(f"^FO5,115^A0N,22,22^FDTarget: {target_qty} | Actual: {accumulated}^FS")
+    
+    y = 150
+    table_start_y = y
+    
+    zpl.append(f"^FO0,{y}^GB440,2,2^FS")
+    y += 5
+    
+    zpl.append(f"^FO5,{y}^A0N,20,20^FDSub-Batch ID^FS")
+    zpl.append(f"^FO215,{y}^A0N,20,20^FDQty^FS")
+    zpl.append(f"^FO280,{y}^A0N,20,20^FDStored Date^FS")
+    y += 25
+    
+    zpl.append(f"^FO0,{y}^GB440,2,2^FS")
+    
+    for sb, q, dt in picked:
+        y += 5
+        zpl.append(f"^FO5,{y}^A0N,18,18^FD{sb}^FS")
+        zpl.append(f"^FO215,{y}^A0N,18,18^FD{q}^FS")
+        dt_short = dt[:16] if dt else ""
+        zpl.append(f"^FO280,{y}^A0N,18,18^FD{dt_short}^FS")
+        y += 25
+        zpl.append(f"^FO0,{y}^GB440,1,1^FS")
+        
+    zpl.append(f"^FO0,{table_start_y}^GB2,{y - table_start_y},2^FS")
+    zpl.append(f"^FO210,{table_start_y}^GB2,{y - table_start_y},2^FS")
+    zpl.append(f"^FO270,{table_start_y}^GB2,{y - table_start_y},2^FS")
+    zpl.append(f"^FO440,{table_start_y}^GB2,{y - table_start_y},2^FS")
+    
+    y += 15
+    import datetime
+    printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    zpl.append(f"^FO5,{y}^A0N,18,18^FDPrinted: {printed}^FS")
+    
+    zpl.append("^PQ1")
+    zpl.append("^XZ")
+    return "\n".join(zpl).encode("utf-8")
+
+def execute_ticket_print(zpl_string, pn, silent=False):
+    config = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                config = json.load(f)
+        except: pass
+
+    printer_name = config.get("zebra_printer", "")
+
+    try:
+        tickets_dir = persistent_path("tickets")
+        os.makedirs(tickets_dir, exist_ok=True)
+        safe_pn = str(pn).replace(":", "").replace("-", "")
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = os.path.join(tickets_dir, f"TICKET_{safe_pn}_{timestamp}.zpl")
+        with open(file_path, "wb") as f:
+            f.write(zpl_string)
+    except Exception as e:
+        print("Could not save Pick Ticket ZPL file:", e)
+
+    if not printer_name:
+        if not silent:
+            messagebox.showwarning("Setup Required", "Ticket saved to 'tickets' folder.\\nPlease configure Zebra Printer in Settings to physically print.")
+        return
+
+    if not WIN32_PRINT_AVAILABLE:
+        if not silent: messagebox.showerror("Error", "win32print module not found. Printing disabled.")
+        return
+
+    try:
+        hPrinter = win32print.OpenPrinter(printer_name)
+        try:
+            hJob = win32print.StartDocPrinter(hPrinter, 1, ("Pick Ticket", None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                win32print.WritePrinter(hPrinter, zpl_string)
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+            if not silent: messagebox.showinfo("Success", f"Pick ticket sent to printer '{printer_name}'")
+        finally:
+            win32print.ClosePrinter(hPrinter)
+    except Exception as e:
+        if not silent: messagebox.showerror("Printer Error", f"Failed to send to printer:\\n{e}")
+
 
 class TraceabilityApp(tk.Tk):
     def __init__(self):
@@ -548,6 +715,7 @@ class TraceabilityApp(tk.Tk):
             pass
         self.configure(bg=BG_COLOR)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.schedule_daily_snapshot()
         
         # Modern Windows 11 Title Bar Color (White background, Blue text)
         try:
@@ -632,7 +800,7 @@ class TraceabilityApp(tk.Tk):
     def prompt_login(self):
         login_win = tk.Toplevel(self)
         login_win.title("HI-LEX Login")
-        login_win.geometry("400x300")
+        center_window(login_win, 400, 300)
         login_win.configure(bg=BG_COLOR)
         login_win.transient(self)
         login_win.grab_set()
@@ -642,12 +810,6 @@ class TraceabilityApp(tk.Tk):
             self.destroy()
             
         login_win.protocol("WM_DELETE_WINDOW", on_login_close)
-        
-        # Center the window on screen
-        login_win.update_idletasks()
-        x = (login_win.winfo_screenwidth() // 2) - (400 // 2)
-        y = (login_win.winfo_screenheight() // 2) - (300 // 2)
-        login_win.geometry(f"+{x}+{y}")
         
         tk.Label(login_win, text="Operator Login", font=HMI_FONT_L, bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=15)
         
@@ -750,7 +912,7 @@ class TraceabilityApp(tk.Tk):
     def open_user_manager(self):
         top = tk.Toplevel(self)
         top.title("User Management (Admin)")
-        top.geometry("800x500")
+        center_window(top, 800, 500)
         top.resizable(False, False)
         
         top.update_idletasks()
@@ -867,12 +1029,7 @@ class TraceabilityApp(tk.Tk):
         top.title("Settings")
         w = 600 if self.is_admin else 450
         h = 400 if self.is_admin else 200
-        top.geometry(f"{w}x{h}")
-        
-        top.update_idletasks()
-        x = (top.winfo_screenwidth() // 2) - (w // 2)
-        y = (top.winfo_screenheight() // 2) - (h // 2)
-        top.geometry(f"+{x}+{y}")
+        center_window(top, w, h)
         
         top.configure(bg=BG_COLOR)
         top.transient(self)
@@ -917,21 +1074,109 @@ class TraceabilityApp(tk.Tk):
             
         ttk.Button(top, text="Save Settings", style="Success.TButton", command=save).pack(pady=10)
         
-        if self.is_admin:
+        if self.is_admin or self.app_user_role in ["Supervisor", "Manager"]:
             tk.Frame(top, bg=BORDER_COLOR, height=2).pack(fill=tk.X, padx=20, pady=10)
-            tk.Label(top, text="Admin Tools", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L).pack(pady=(5, 5))
+            tk.Label(top, text="Management Tools", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L).pack(pady=(5, 5))
             
             admin_frame = tk.Frame(top, bg=BG_COLOR)
             admin_frame.pack(fill=tk.X, padx=20, pady=10)
             
-            ttk.Button(admin_frame, text="Manage Products", style="Primary.TButton", command=self.open_product_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
-            ttk.Button(admin_frame, text="Audit Logs", style="Primary.TButton", command=self.open_logs_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
-            ttk.Button(admin_frame, text="Manage Users", style="Warning.TButton", command=self.open_user_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+            ttk.Button(admin_frame, text="Manage Targets", style="Success.TButton", command=self.open_targets_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+            if self.is_admin:
+                ttk.Button(admin_frame, text="Manage Products", style="Primary.TButton", command=self.open_product_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+                ttk.Button(admin_frame, text="Audit Logs", style="Primary.TButton", command=self.open_logs_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+                ttk.Button(admin_frame, text="Manage Users", style="Warning.TButton", command=self.open_user_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+
+    def open_targets_manager(self):
+        top = tk.Toplevel(self)
+        top.title("Production Targets Management")
+        center_window(top, 800, 600)
+        top.configure(bg=BG_COLOR)
+        top.transient(self)
+        top.grab_set()
+        
+        main_frame = tk.Frame(top, bg=BG_COLOR)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        form_frame = tk.LabelFrame(main_frame, text="Add New Target", bg=BG_COLOR, fg=TEXT_COLOR)
+        form_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        tk.Label(form_frame, text="Product PN:", bg=BG_COLOR, fg=TEXT_COLOR).grid(row=0, column=0, padx=5, pady=5)
+        var_pn = tk.StringVar()
+        cb_pn = ttk.Combobox(form_frame, textvariable=var_pn, values=list(SF_DATA.keys()), state="normal")
+        cb_pn.grid(row=0, column=1, padx=5, pady=5)
+        
+        tk.Label(form_frame, text="Target Qty:", bg=BG_COLOR, fg=TEXT_COLOR).grid(row=0, column=2, padx=5, pady=5)
+        var_qty = tk.StringVar()
+        entry_qty = ttk.Entry(form_frame, textvariable=var_qty)
+        entry_qty.grid(row=0, column=3, padx=5, pady=5)
+        
+        def refresh_tree():
+            for item in tree.get_children(): tree.delete(item)
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT id, product_pn, target_qty, effective_date FROM shift_targets ORDER BY id DESC")
+            for row in c.fetchall():
+                tree.insert("", "end", values=row)
+            conn.close()
+            
+        def add_target():
+            pn = var_pn.get().strip()
+            shift = "All"
+            station = "All"
+            qty_str = var_qty.get()
+            
+            if not pn or not qty_str.isdigit():
+                messagebox.showerror("Error", "Invalid PN or Quantity")
+                return
+                
+            qty = int(qty_str)
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("INSERT INTO shift_targets (product_pn, shift, station, target_qty, effective_date) VALUES (?, ?, ?, ?, ?)",
+                      (pn, shift, station, qty, now_str))
+            conn.commit()
+            conn.close()
+            
+            var_qty.set("")
+            refresh_tree()
+            if hasattr(self, 'refresh_kpis'):
+                self.refresh_kpis()
+            
+        def delete_target():
+            selected = tree.selection()
+            if not selected: return
+            item = tree.item(selected[0])
+            tid = item['values'][0]
+            
+            if messagebox.askyesno("Confirm", "Delete selected target?"):
+                conn = get_db_connection()
+                c = conn.cursor()
+                c.execute("DELETE FROM shift_targets WHERE id=?", (tid,))
+                conn.commit()
+                conn.close()
+                refresh_tree()
+                if hasattr(self, 'refresh_kpis'):
+                    self.refresh_kpis()
+                
+        ttk.Button(form_frame, text="Add Target", style="Success.TButton", command=add_target).grid(row=0, column=4, padx=10, pady=5)
+        
+        cols = ("ID", "PN", "Target Qty", "Effective Date")
+        tree = ttk.Treeview(main_frame, columns=cols, show="headings")
+        for c in cols: tree.heading(c, text=c)
+        tree.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        ttk.Button(main_frame, text="Delete Selected", style="Danger.TButton", command=delete_target).pack(pady=5)
+        
+        refresh_tree()
+
 
     def open_product_manager(self):
         top = tk.Toplevel(self)
         top.title("Product Management (Admin)")
-        top.geometry("900x600")
+        center_window(top, 900, 600)
         top.resizable(False, False)
         
         top.update_idletasks()
@@ -1151,7 +1396,7 @@ class TraceabilityApp(tk.Tk):
     def open_logs_manager(self):
         top = tk.Toplevel(self)
         top.title("System Audit Logs")
-        top.geometry("1000x600")
+        center_window(top, 1000, 600)
         top.resizable(False, False)
         
         top.update_idletasks()
@@ -1267,28 +1512,7 @@ class TraceabilityApp(tk.Tk):
         self.settings_btn.pack(side=tk.RIGHT, padx=20)
         
         def do_logout():
-            if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?", parent=self):
-                if hasattr(self, 'app_user_id') and self.app_user_id:
-                    try:
-                        conn = get_db_connection()
-                        c = conn.cursor()
-                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        c.execute("INSERT INTO system_access_logs (event_type, user_id, shift, timestamp) VALUES (?, ?, ?, ?)",
-                                  ("LOGOUT", self.app_user_id, self.app_user_shift, timestamp))
-                        conn.commit()
-                        conn.close()
-                    except Exception as e:
-                        pass
-
-                self.app_user_id = ""
-                self.app_user_shift = ""
-                self.is_admin = False
-                self.lbl_header_user.config(text="User: - | Shift: -")
-                if hasattr(self, 'lbl_header_warning'):
-                    self.lbl_header_warning.pack_forget()
-                if hasattr(self, 'notebook') and hasattr(self, 'tab3'):
-                    self.notebook.hide(self.tab3)
-                self.prompt_login()
+            self.perform_logout(force=False)
                 
         self.logout_btn = ttk.Button(self.header_frame, text="Logout", style="Danger.TButton", command=do_logout)
         self.logout_btn.pack(side=tk.RIGHT, padx=5)
@@ -1391,6 +1615,33 @@ class TraceabilityApp(tk.Tk):
         
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         self._check_quality_rate()
+
+    def perform_logout(self, force=False):
+        if not force:
+            if not messagebox.askyesno("Confirm Logout", "Are you sure you want to log out?", parent=self):
+                return
+                
+        if hasattr(self, 'app_user_id') and self.app_user_id:
+            try:
+                conn = get_db_connection()
+                c = conn.cursor()
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                c.execute("INSERT INTO system_access_logs (event_type, user_id, shift, timestamp) VALUES (?, ?, ?, ?)",
+                          ("LOGOUT", self.app_user_id, self.app_user_shift, timestamp))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                pass
+
+        self.app_user_id = ""
+        self.app_user_shift = ""
+        self.is_admin = False
+        self.lbl_header_user.config(text="User: - | Shift: -")
+        if hasattr(self, 'lbl_header_warning'):
+            self.lbl_header_warning.pack_forget()
+        if hasattr(self, 'notebook') and hasattr(self, 'tab3'):
+            self.notebook.hide(self.tab3)
+        self.prompt_login()
         
     def _on_tab_changed(self, event):
         try:
@@ -1488,11 +1739,11 @@ class TraceabilityApp(tk.Tk):
         _, search_frame = self.create_card(self.t1_left, "Quick Search")
         self.sv_search = tk.StringVar()
         self.sv_search.trace_add("write", self.filter_sf_combobox)
-        search_entry = ttk.Entry(search_frame, textvariable=self.sv_search, width=30)
+        search_entry = ttk.Entry(search_frame, textvariable=self.sv_search, width=20)
         search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
         self.lbl_search_count = tk.Label(search_frame, text="30", fg=ACCENT_COLOR, bg=BG_COLOR)
         self.lbl_search_count.pack(side=tk.LEFT, padx=5)
-        ttk.Button(search_frame, text="", width=3, command=lambda: self.sv_search.set("")).pack(side=tk.LEFT)
+        # ttk.Button(search_frame, text="❌​", width=3, command=lambda: self.sv_search.set("")).pack(side=tk.LEFT)
         
         # Status Label
         self.lbl_status = tk.Label(self.t1_left, text="", bg=BG_COLOR, fg=SUCCESS_COLOR, font=HMI_FONT_M)
@@ -1526,34 +1777,8 @@ class TraceabilityApp(tk.Tk):
         
 
         # ---------------- RIGHT PANEL (FORM) ----------------
-        self.canvas_t1 = tk.Canvas(self.t1_right, bg=BG_COLOR, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(self.t1_right, orient="vertical", command=self.canvas_t1.yview)
-        self.form_frame = tk.Frame(self.canvas_t1, bg=BG_COLOR)
-        
-        # Make the form frame fill the canvas width
-        self.t1_window = self.canvas_t1.create_window((0, 0), window=self.form_frame, anchor="nw")
-        
-        def resize_form(event):
-            canvas_width = event.width
-            self.canvas_t1.itemconfig(self.t1_window, width=canvas_width)
-            self.canvas_t1.configure(scrollregion=self.canvas_t1.bbox("all"))
-            
-        self.canvas_t1.bind("<Configure>", resize_form)
-        self.form_frame.bind("<Configure>", lambda e: self.canvas_t1.configure(scrollregion=self.canvas_t1.bbox("all")))
-        
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas_t1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        def _on_mousewheel(event):
-            try:
-                widget = self.winfo_containing(event.x_root, event.y_root)
-                if widget and widget.winfo_class() in ("Listbox", "Treeview"):
-                    return
-                if self.notebook.index("current") == 0:
-                    self.canvas_t1.yview_scroll(int(-1*(event.delta/120)), "units")
-            except Exception:
-                pass
-        self.bind_all("<MouseWheel>", _on_mousewheel)
+        self.form_frame = tk.Frame(self.t1_right, bg=BG_COLOR)
+        self.form_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=20, pady=10)
         
         # Section 1: Part Reference
         _, lf1 = self.create_card(self.form_frame, "Part Reference")
@@ -1975,11 +2200,11 @@ class TraceabilityApp(tk.Tk):
         tree_frame = tk.Frame(self.tab2, bg=BG_COLOR)
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        cols = ("SB_ID", "SF_PN", "SF_Name", "Qty", "Shift", "Station", "Op_ID", "DateTime", "Status")
+        cols = ("SB_ID", "SF_PN", "SF_Name", "Qty", "Shift", "Station", "Op_ID", "DateTime", "Status", "Reprints")
         self.tree_records = ttk.Treeview(tree_frame, columns=cols, show="headings")
         for c in cols:
             self.tree_records.heading(c, text=c, command=lambda _c=c: self.sort_treeview(self.tree_records, _c, False))
-            self.tree_records.column(c, width=100)
+            self.tree_records.column(c, width=90)
             
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree_records.xview)
         self.tree_records.configure(xscrollcommand=hsb.set)
@@ -1992,8 +2217,22 @@ class TraceabilityApp(tk.Tk):
         self.tree_records.tag_configure("pending", background=WARNING_COLOR, foreground="black")
         self.tree_records.tag_configure("even", background="#141A20")
         self.tree_records.tag_configure("odd", background="#1B232C")
+        self.tree_records.tag_configure("reprint_highlight", background="#B45309", foreground="white") # Orange background for reprinted labels
         self.tree_records.bind("<Double-1>", lambda e: self.print_selected_record())
+        
+        self.rec_context_menu = tk.Menu(self.tree_records, tearoff=0, bg=SURFACE_COLOR, fg=TEXT_COLOR, activebackground=ACCENT_COLOR, activeforeground=TEXT_COLOR)
+        self.rec_context_menu.add_command(label="View Operator Scorecard", command=self.open_operator_scorecard)
 
+        def on_rec_right_click(event):
+            user_role = getattr(self, 'app_user_role', 'Operator')
+            if user_role not in ["Supervisor", "Manager", "Admin"]:
+                return
+            item = self.tree_records.identify_row(event.y)
+            if item:
+                self.tree_records.selection_set(item)
+                self.rec_context_menu.tk_popup(event.x_root, event.y_root)
+
+        self.tree_records.bind("<Button-3>", on_rec_right_click)
         self.page_frame = tk.Frame(self.tab2, bg=BG_COLOR)
         self.page_frame.pack(fill=tk.X, pady=5)
 
@@ -2080,6 +2319,10 @@ class TraceabilityApp(tk.Tk):
                     start_dt = now.strftime("%Y-%m-%d 12:00:00")
                     
             if trigger:
+                if hasattr(self, 'app_user_id') and self.app_user_id:
+                    print(f"Shift ended! Forcing logout for {self.app_user_id}...")
+                    self.perform_logout(force=True)
+
                 key = f"{now.strftime('%Y-%m-%d')}_{h:02d}{m:02d}"
                 
                 last_key_file = os.path.join(DATA_DIR, "last_report.json")
@@ -2168,13 +2411,22 @@ class TraceabilityApp(tk.Tk):
             for widget in self.tracker_scroll_frame.winfo_children():
                 widget.destroy()
                 
-            all_pns_to_track = set(shift_pns_data.keys()).union(set(PROD_RATES.keys()))
-            sorted_pns = sorted(list(all_pns_to_track), key=lambda x: (x not in PROD_RATES, x))
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT product_pn, target_qty FROM shift_targets ORDER BY id ASC")
+            db_targets = {}
+            for row in c.fetchall():
+                db_targets[row[0]] = row[1]
+            conn.close()
+            all_pns_to_track = set([p for p, q in shift_pns_data.items() if q > 0])
+            if current_pn:
+                all_pns_to_track.add(current_pn)
+                
+            sorted_pns = sorted(list(all_pns_to_track), key=lambda x: (x not in db_targets, x))
             
             for pn in sorted_pns:
                 qty = shift_pns_data.get(pn, 0)
-                rate = PROD_RATES.get(pn, DEFAULT_RATE)
-                tgt = int((work_mins / 60.0) * rate)
+                tgt = db_targets.get(pn, 0)
                 pct = min(100, (qty / tgt) * 100) if tgt > 0 else 0
                 
                 f = tk.Frame(self.tracker_scroll_frame, bg=SURFACE_COLOR)
@@ -2473,7 +2725,7 @@ class TraceabilityApp(tk.Tk):
         for item in self.tree_records.get_children():
             self.tree_records.delete(item)
             
-        query = "SELECT sub_batch_id, pn_sf, part_sf, quantity, shift_sp, station, op_id, dt_sp, status FROM records WHERE 1=1"
+        query = "SELECT sub_batch_id, pn_sf, part_sf, quantity, shift_sp, station, op_id, dt_sp, status, reprint_count FROM records WHERE 1=1"
         params = []
         
         search = self.var_rec_search.get()
@@ -2512,8 +2764,13 @@ class TraceabilityApp(tk.Tk):
         display_rows = rows[start_idx:end_idx]
         
         for i, row in enumerate(display_rows):
+            status_val = row[8]
+            reprint_count = row[9] if row[9] is not None else 0
+            
             tags = ()
-            if row[7] == 'pending':
+            if reprint_count >= 1:
+                tags = ("reprint_highlight",)
+            elif status_val == 'pending':
                 tags = ("pending",)
             else:
                 tags = ("even" if i % 2 == 0 else "odd",)
@@ -2588,6 +2845,109 @@ class TraceabilityApp(tk.Tk):
         sb_id = self.tree_recent.item(item[0], "values")[0]
         self.do_print(sb_id)
 
+    def open_operator_scorecard(self):
+        selected = self.tree_records.selection()
+        if not selected: return
+        item = self.tree_records.item(selected[0])
+        op_id = item['values'][6]
+        
+        top = tk.Toplevel(self)
+        top.title(f"Operator Scorecard: {op_id}")
+        center_window(top, 600, 400)
+        top.configure(bg=BG_COLOR)
+        top.transient(self)
+        
+        # Header
+        header = tk.Frame(top, bg=SURFACE_COLOR)
+        header.pack(fill=tk.X, padx=10, pady=10)
+        
+        tk.Label(header, text="Performance Scorecard", font=("Inter", 14, "bold"), bg=SURFACE_COLOR, fg=TEXT_COLOR).pack(side=tk.LEFT, padx=10, pady=10)
+        tk.Label(header, text=f"Operator: {op_id}", font=("Inter", 12), bg=SURFACE_COLOR, fg=ACCENT_COLOR).pack(side=tk.RIGHT, padx=10, pady=10)
+        
+        # Filter
+        filter_frame = tk.Frame(top, bg=BG_COLOR)
+        filter_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(filter_frame, text="Time Window:", bg=BG_COLOR, fg=TEXT_COLOR).pack(side=tk.LEFT)
+        var_window = tk.StringVar(value="Today")
+        
+        def refresh_scorecard(*args):
+            window = var_window.get()
+            now = datetime.datetime.now()
+            today_date = now.date()
+            if now.hour < 6: today_date -= datetime.timedelta(days=1)
+            
+            if window == "Today":
+                start_dt = f"{today_date.strftime('%Y-%m-%d')} 06:00:00"
+            elif window == "This Week":
+                start_week = today_date - datetime.timedelta(days=today_date.weekday())
+                start_dt = f"{start_week.strftime('%Y-%m-%d')} 06:00:00"
+            else: # This Month
+                start_month = today_date.replace(day=1)
+                start_dt = f"{start_month.strftime('%Y-%m-%d')} 06:00:00"
+                
+            conn = get_db_connection()
+            c = conn.cursor()
+            
+            # 1. Total Output & Shift Avg
+            c.execute("SELECT op_id, SUM(quantity) FROM records WHERE dt_sp >= ? GROUP BY op_id", (start_dt,))
+            op_data = c.fetchall()
+            
+            total_output = 0
+            shift_total = 0
+            op_count = len(op_data)
+            for r in op_data:
+                q = r[1] or 0
+                shift_total += q
+                if r[0] == str(op_id):
+                    total_output = q
+                    
+            shift_avg = (shift_total / op_count) if op_count > 0 else 0
+            
+            # 2. Quality Rate & Quarantine Events
+            c.execute("SELECT qty_defective, is_quarantined FROM quality_defects WHERE produced_by_op = ? AND reported_at >= ?", (str(op_id), start_dt))
+            defects = c.fetchall()
+            total_defects = sum(d[0] for d in defects if d[0])
+            quarantine_events = sum(1 for d in defects if d[1] == 1)
+            
+            qual_rate = ((total_output - total_defects) / total_output * 100) if total_output > 0 else (100 if total_output > 0 else 0)
+            
+            conn.close()
+            
+            # Update UI
+            lbl_out_val.config(text=f"{total_output}")
+            lbl_avg_val.config(text=f"{shift_avg:.1f}")
+            lbl_qual_val.config(text=f"{qual_rate:.1f}%" if total_output > 0 else "N/A")
+            lbl_quar_val.config(text=f"{quarantine_events}")
+            
+        cb_window = ttk.Combobox(filter_frame, textvariable=var_window, values=["Today", "This Week", "This Month"], state="readonly", width=15)
+        cb_window.pack(side=tk.LEFT, padx=10)
+        cb_window.bind("<<ComboboxSelected>>", refresh_scorecard)
+        
+        # Metrics Grid
+        metrics_frame = tk.Frame(top, bg=BG_COLOR)
+        metrics_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        def create_metric_card(parent, title, row, col, fg=TEXT_COLOR):
+            f = tk.Frame(parent, bg=SURFACE_COLOR, bd=1, relief="ridge")
+            f.grid(row=row, column=col, sticky="nsew", padx=10, pady=10)
+            tk.Label(f, text=title, font=("Inter", 10), bg=SURFACE_COLOR, fg=TEXT_MUTED).pack(pady=(15,5))
+            lbl_val = tk.Label(f, text="0", font=("Inter", 24, "bold"), bg=SURFACE_COLOR, fg=fg)
+            lbl_val.pack(pady=(0,15))
+            return lbl_val
+            
+        metrics_frame.columnconfigure(0, weight=1)
+        metrics_frame.columnconfigure(1, weight=1)
+        metrics_frame.rowconfigure(0, weight=1)
+        metrics_frame.rowconfigure(1, weight=1)
+        
+        lbl_out_val = create_metric_card(metrics_frame, "Total Output", 0, 0, SUCCESS_COLOR)
+        lbl_avg_val = create_metric_card(metrics_frame, "Shift Average (All Ops)", 0, 1, ACCENT_COLOR)
+        lbl_qual_val = create_metric_card(metrics_frame, "Quality Rate", 1, 0, SUCCESS_COLOR)
+        lbl_quar_val = create_metric_card(metrics_frame, "Quarantine Events", 1, 1, WARNING_COLOR)
+        
+        refresh_scorecard()
+
     def print_selected_record(self):
         item = self.tree_records.selection()
         if not item: return
@@ -2616,129 +2976,367 @@ class TraceabilityApp(tk.Tk):
         if row:
             record_data = dict(row)
             
-            preview = tk.Toplevel(self)
-            preview.title("Label Preview")
-            preview.geometry("400x500")
-            preview.configure(bg=BG_COLOR)
-            preview.transient(self)
-            preview.grab_set()
-            
-            tk.Label(preview, text="Label Preview", font=HMI_FONT_L, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
-            
-            details_frame = tk.Frame(preview, bg=SURFACE_COLOR, bd=1, relief="solid")
-            details_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-            
-            details = [
-                ("Sub-Batch ID", record_data.get('sub_batch_id')),
-                ("Part Number", record_data.get('pn_sf')),
-                ("Part Name", record_data.get('part_sf')),
-                ("Quantity", record_data.get('quantity')),
-                ("Operator ID", record_data.get('op_id')),
-                ("Date & Time", record_data.get('dt_sp')),
-            ]
-            
-            for i, (k, v) in enumerate(details):
-                tk.Label(details_frame, text=f"{k}:", font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED).grid(row=i, column=0, sticky="e", padx=10, pady=5)
-                tk.Label(details_frame, text=str(v), font=HMI_FONT_M, bg=SURFACE_COLOR, fg=TEXT_COLOR).grid(row=i, column=1, sticky="w", padx=10, pady=5)
+            # Update reprint audit trail silently
+            try:
+                conn_update = get_db_connection()
+                c_update = conn_update.cursor()
+                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                c_update.execute('''UPDATE records 
+                                  SET reprint_count = reprint_count + 1, 
+                                      last_reprinted_at = ?, 
+                                      last_reprinted_by = ? 
+                                  WHERE sub_batch_id = ?''', 
+                               (now_str, getattr(self, 'app_user_id', ''), sb_id))
+                conn_update.commit()
+                conn_update.close()
+                self.refresh_records_treeview() # Update UI to show new reprint count
                 
-            btn_frame = tk.Frame(preview, bg=BG_COLOR)
-            btn_frame.pack(fill=tk.X, pady=20)
-            
-            def confirm_print():
-                preview.destroy()
-                print_html_slip(record_data)
+                record_data['reprint_count'] = int(record_data.get('reprint_count') or 0) + 1
+                record_data['last_reprinted_by'] = getattr(self, 'app_user_id', '')
+                record_data['last_reprinted_at'] = now_str
+            except Exception as e:
+                print(f"Failed to update reprint audit trail: {e}")
                 
-            ttk.Button(btn_frame, text="Print Label", style="Success.TButton", command=confirm_print).pack(side=tk.LEFT, expand=True, padx=10)
-            ttk.Button(btn_frame, text="Cancel", style="Danger.TButton", command=preview.destroy).pack(side=tk.LEFT, expand=True, padx=10)
+            # Print silently
+            print_html_slip(record_data, silent=True)
             
         else:
             messagebox.showerror("Error", f"Record not found: {sb_id}")
 
     def build_tab_inventory(self):
         main_frame = tk.Frame(self.tab_inventory, bg=BG_COLOR)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(main_frame, text="Live Inventory Dashboard", bg=BG_COLOR, fg=ACCENT_COLOR, font=HMI_FONT_L).pack(pady=(10, 5))
+        self.stats_frame = tk.Frame(main_frame, bg=BG_COLOR)
+        self.stats_frame.pack(fill=tk.X, padx=20, pady=5)
+        self.lbl_stat_total = self.create_stat_card(self.stats_frame, "Total Boxes in Rack", "0", ACCENT_COLOR)
+        self.lbl_stat_oldest = self.create_stat_card(self.stats_frame, "Oldest Box Age", "0 days", ERROR_COLOR)
+        self.lbl_stat_low = self.create_stat_card(self.stats_frame, "Low WIP Alerts", "0", WARNING_COLOR)
         
-        tk.Label(main_frame, text="Live Inventory (In Rack)", bg=BG_COLOR, fg=ACCENT_COLOR, font=HMI_FONT_L).pack(pady=(0, 20))
+        # Control Panel Row
+        control_frame = tk.Frame(main_frame, bg=SURFACE_COLOR, bd=1, relief="solid")
+        control_frame.pack(fill=tk.X, padx=20, pady=10)
         
-        # Top: Aggregated View
-        _, agg_card = self.create_card(main_frame, "Summary by Part Number")
+        # Filter
+        filter_frame = tk.Frame(control_frame, bg=SURFACE_COLOR)
+        filter_frame.pack(side=tk.LEFT, padx=20, pady=10)
+        tk.Label(filter_frame, text="Filter by PN:", font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED).pack(side=tk.LEFT)
+        self.inv_search_var = tk.StringVar()
+        self.inv_search_var.trace_add('write', lambda *args: self.refresh_inventory())
+        tk.Entry(filter_frame, textvariable=self.inv_search_var, font=HMI_FONT_M, bg=BG_COLOR, fg=TEXT_COLOR).pack(side=tk.LEFT, padx=10)
         
-        cols_agg = ("PN", "Part Name", "Total Qty", "Box Count")
-        self.tree_inv_agg = ttk.Treeview(agg_card, columns=cols_agg, show="headings", height=5)
-        for col in cols_agg:
-            self.tree_inv_agg.heading(col, text=col)
-        self.tree_inv_agg.column("PN", width=200)
-        self.tree_inv_agg.column("Part Name", width=300)
-        self.tree_inv_agg.column("Total Qty", width=100)
-        self.tree_inv_agg.column("Box Count", width=100)
-        self.tree_inv_agg.pack(fill=tk.X, pady=10, padx=10)
+        # Pick List Generator
+        pick_frame = tk.Frame(control_frame, bg=SURFACE_COLOR)
+        pick_frame.pack(side=tk.RIGHT, padx=20, pady=10)
+        tk.Label(pick_frame, text="Pick-List Generator | PN:", font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED).pack(side=tk.LEFT)
+        self.pick_pn_var = tk.StringVar()
+        self.pick_pn_combo = ttk.Combobox(pick_frame, textvariable=self.pick_pn_var, font=HMI_FONT_M, width=18, state="readonly")
+        self.pick_pn_combo.pack(side=tk.LEFT, padx=5)
+        tk.Label(pick_frame, text="Qty:", font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED).pack(side=tk.LEFT)
+        self.pick_qty_var = tk.StringVar()
+        tk.Entry(pick_frame, textvariable=self.pick_qty_var, font=HMI_FONT_M, width=8, bg=BG_COLOR, fg=TEXT_COLOR).pack(side=tk.LEFT, padx=5)
+        ttk.Button(pick_frame, text="Generate Ticket", style="Accent.TButton", command=self.generate_pick_list).pack(side=tk.LEFT, padx=10)
         
-        # Bottom: Detailed View (Oldest First)
-        _, det_card = self.create_card(main_frame, "Detailed Rack Content (FIFO)")
+        # PanedWindow for the tables
+        paned = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        left_pane = tk.Frame(paned, bg=BG_COLOR, width=450)
+        paned.add(left_pane, weight=2)
         
-        cols_det = ("SB_ID", "PN", "Qty", "DateTime", "Age", "Status")
-        self.tree_inv_det = ttk.Treeview(det_card, columns=cols_det, show="headings", height=12)
-        for col in cols_det:
-            self.tree_inv_det.heading(col, text=col)
-        self.tree_inv_det.column("SB_ID", width=200)
-        self.tree_inv_det.column("PN", width=200)
-        self.tree_inv_det.column("Qty", width=100)
-        self.tree_inv_det.column("DateTime", width=150)
-        self.tree_inv_det.column("Age", width=100)
-        self.tree_inv_det.column("Status", width=100)
+        right_pane = tk.Frame(paned, bg=BG_COLOR, width=850)
+        paned.add(right_pane, weight=3)
+        
+        table_paned = ttk.PanedWindow(left_pane, orient=tk.VERTICAL)
+        table_paned.pack(fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        # Row 1: Summary Table
+        row1 = tk.Frame(table_paned, bg=BG_COLOR)
+        table_paned.add(row1, weight=1)
+
+        _, agg_card = self.create_card(row1, "Summary by Part Number (Right-Click to Set Min Threshold)")
+        cols_agg = ("PN", "Part Name", "Total Qty", "Min Qty", "Box Count")
+        self.tree_inv_agg = ttk.Treeview(agg_card, columns=cols_agg, show="headings", height=8)
+        for col in cols_agg: self.tree_inv_agg.heading(col, text=col)
+        self.tree_inv_agg.column("PN", width=120); self.tree_inv_agg.column("Part Name", width=120); self.tree_inv_agg.column("Total Qty", width=60); self.tree_inv_agg.column("Min Qty", width=60); self.tree_inv_agg.column("Box Count", width=60)
+        self.tree_inv_agg.pack(fill=tk.BOTH, expand=True, pady=10, padx=10)
+        
+        self.tree_inv_agg.tag_configure("low_wip", background="#FFEBEE", foreground="#C62828")
+        
+        def set_min_threshold(event):
+            item = self.tree_inv_agg.identify_row(event.y)
+            if not item: return
+            self.tree_inv_agg.selection_set(item)
+            pn = self.tree_inv_agg.item(item, "values")[0]
+            qty_str = simpledialog.askstring("Set Threshold", f"Enter minimum required quantity for {pn}:", parent=self)
+            if qty_str and qty_str.isdigit():
+                try:
+                    conn = get_db_connection()
+                    c = conn.cursor()
+                    c.execute("INSERT OR REPLACE INTO part_thresholds (pn_sf, min_qty) VALUES (?, ?)", (pn, int(qty_str)))
+                    conn.commit()
+                    conn.close()
+                    self.refresh_inventory()
+                except Exception as e:
+                    messagebox.showerror("Error", str(e))
+        self.tree_inv_agg.bind("<Button-3>", set_min_threshold)
+        
+        # Row 2: Details Table
+        row2 = tk.Frame(table_paned, bg=BG_COLOR)
+        table_paned.add(row2, weight=1)
+        
+        _, det_card = self.create_card(row2, "Detailed Rack Content (FIFO)")
+        cols_det = ("SB_ID", "PN", "Qty", "Age", "Status")
+        self.tree_inv_det = ttk.Treeview(det_card, columns=cols_det, show="headings", height=10)
+        for col in cols_det: self.tree_inv_det.heading(col, text=col)
+        self.tree_inv_det.column("SB_ID", width=120); self.tree_inv_det.column("PN", width=120); self.tree_inv_det.column("Qty", width=50); self.tree_inv_det.column("Age", width=80); self.tree_inv_det.column("Status", width=60)
         
         self.tree_inv_det.tag_configure("age_green", background="#E8F5E9", foreground="#2E7D32")
-        self.tree_inv_det.tag_configure("age_yellow", background="#FFFDE7", foreground="#D32F2F") # changed to red-ish/dark yellow for visibility
+        self.tree_inv_det.tag_configure("age_yellow", background="#FFFDE7", foreground="#F9A825")
+        self.tree_inv_det.tag_configure("age_red", background="#FFEBEE", foreground="#C62828")
         
-        scrollbar = ttk.Scrollbar(det_card, orient=tk.VERTICAL, command=self.tree_inv_det.yview)
-        self.tree_inv_det.configure(yscroll=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrolldet = ttk.Scrollbar(det_card, orient=tk.VERTICAL, command=self.tree_inv_det.yview)
+        self.tree_inv_det.configure(yscroll=scrolldet.set)
+        scrolldet.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree_inv_det.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Right Pane: WIP Chart
+        _, chart1_card = self.create_card(right_pane, "WIP Level by Part Number")
+        
+        if MATPLOTLIB_AVAILABLE:
+            self.fig_wip = Figure(figsize=(5, 5), dpi=100, facecolor=SURFACE_COLOR)
+            self.ax_wip = self.fig_wip.add_subplot(111)
+            self.style_ax(self.ax_wip, "")
+            self.lbl_chart_wip = tk.Label(chart1_card, bg=SURFACE_COLOR)
+            self.lbl_chart_wip.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+    def create_stat_card(self, parent, title, initial_value, color):
+        frame = tk.Frame(parent, bg=SURFACE_COLOR, bd=1, relief="solid", padx=20, pady=10)
+        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        tk.Label(frame, text=title, font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED).pack()
+        lbl = tk.Label(frame, text=initial_value, font=HMI_FONT_XL, bg=SURFACE_COLOR, fg=color)
+        lbl.pack()
+        return lbl
+
+    def generate_pick_list(self):
+        pn = self.pick_pn_var.get().strip()
+        qty_str = self.pick_qty_var.get().strip()
+        if not pn or not qty_str.isdigit():
+            messagebox.showerror("Error", "Please enter a valid Part Number and numeric Quantity.")
+            return
+        target_qty = int(qty_str)
+        
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('''SELECT sub_batch_id, quantity, dt_sp 
+                     FROM records 
+                     WHERE status="In Rack" AND pn_sf=? 
+                     ORDER BY dt_sp ASC''', (pn,))
+        rows = c.fetchall()
+        conn.close()
+        
+        if not rows:
+            messagebox.showinfo("Pick List", f"No inventory found in rack for {pn}")
+            return
+            
+        picked = []
+        accumulated = 0
+        for r in rows:
+            picked.append((r[0], r[1], r[2]))
+            accumulated += r[1]
+            if accumulated >= target_qty:
+                break
+                
+        if accumulated < target_qty:
+            messagebox.showwarning("Shortage", f"Only {accumulated} units available in the rack. Cannot fulfill {target_qty}.")
+            
+        # Display the Pick List
+        popup = tk.Toplevel(self)
+        popup.title(f"FIFO Pick Ticket - {pn}")
+        center_window(popup, 500, 600)
+        popup.configure(bg=BG_COLOR)
+        popup.transient(self)
+        popup.grab_set()
+        
+        tk.Label(popup, text=f"FIFO Pick Ticket", font=HMI_FONT_L, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
+        tk.Label(popup, text=f"Part: {pn} | Target: {target_qty} | Actual: {accumulated}", font=HMI_FONT_M, bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=5)
+        
+        frame = tk.Frame(popup, bg=SURFACE_COLOR)
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        for i, (sb, q, dt) in enumerate(picked):
+            tk.Label(frame, text=f"{i+1}. {sb} (Qty: {q})", font=HMI_FONT_M, bg=SURFACE_COLOR, fg=TEXT_COLOR, anchor="w").pack(fill=tk.X, padx=10, pady=2)
+            tk.Label(frame, text=f"   Stored: {dt}", font=HMI_FONT_S, bg=SURFACE_COLOR, fg=TEXT_MUTED, anchor="w").pack(fill=tk.X, padx=10)
+
+        btn_frame = tk.Frame(popup, bg=BG_COLOR)
+        btn_frame.pack(pady=20)
+        
+        def print_ticket():
+            zpl_data = generate_pick_ticket_zpl(pn, target_qty, accumulated, picked)
+            execute_ticket_print(zpl_data, pn)
+            
+        ttk.Button(btn_frame, text="Print Ticket", style="Accent.TButton", command=print_ticket).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="Close", style="Secondary.TButton", command=popup.destroy).pack(side=tk.LEFT, padx=10)
 
     def refresh_inventory(self):
+        search_q = getattr(self, 'inv_search_var', tk.StringVar()).get().strip().lower()
+        
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Aggregated
-        c.execute('''SELECT pn_sf, part_sf, SUM(quantity), COUNT(*) 
-                     FROM records WHERE status="In Rack" GROUP BY pn_sf''')
+        # Aggregated with threshold
+        c.execute('''SELECT r.pn_sf, r.part_sf, SUM(r.quantity), COUNT(r.id), COALESCE(t.min_qty, 0)
+                     FROM records r
+                     LEFT JOIN part_thresholds t ON r.pn_sf = t.pn_sf
+                     WHERE r.status="In Rack"
+                     GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC''')
         agg_rows = c.fetchall()
         
         # Detailed
         c.execute('''SELECT sub_batch_id, pn_sf, quantity, dt_sp, status 
-                     FROM records WHERE status="In Rack" ORDER BY dt_sp ASC''')
+                     FROM records WHERE status="In Rack" ORDER BY pn_sf, dt_sp ASC''')
         det_rows = c.fetchall()
         conn.close()
         
-        # Clear existing
         for item in self.tree_inv_agg.get_children(): self.tree_inv_agg.delete(item)
         for item in self.tree_inv_det.get_children(): self.tree_inv_det.delete(item)
         
+        pn_labels = []
+        qty_values = []
+        min_values = []
+        part_labels = []
+        full_pns = []
+        low_wip_count = 0
+        total_boxes = 0
+        
         for row in agg_rows:
-            self.tree_inv_agg.insert("", "end", values=row)
+            pn, part, total_qty, box_count, min_qty = row
+            if search_q and search_q not in pn.lower() and search_q not in part.lower():
+                continue
+            
+            tag = ""
+            if total_qty < min_qty:
+                tag = "low_wip"
+                low_wip_count += 1
+                
+            self.tree_inv_agg.insert("", "end", values=(pn, part, total_qty, min_qty, box_count), tags=(tag,))
+            pn_labels.append(pn[:15])
+            part_labels.append(part[:25])
+            full_pns.append(pn)
+            qty_values.append(total_qty or 0)
+            min_values.append(min_qty or 0)
+            total_boxes += box_count
             
         now = datetime.datetime.now()
+        age_counts = {"< 2 Days": 0, "2-7 Days": 0, "> 7 Days": 0}
+        max_age_days = 0
+        max_age_hours = 0
+        
+        # Track oldest box per PN to add star
+        pn_oldest_dt = {}
         for row in det_rows:
+            pn = row[1]
             dt_str = row[3]
             try:
-                dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                try:
+                    dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+                if pn not in pn_oldest_dt or dt_obj < pn_oldest_dt[pn]:
+                    pn_oldest_dt[pn] = dt_obj
+            except: pass
+            
+        for row in det_rows:
+            pn = row[1]
+            if search_q and search_q not in pn.lower():
+                continue
+                
+            dt_str = row[3]
+            try:
+                try:
+                    dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
                 diff = now - dt_obj
                 hours = diff.total_seconds() / 3600
                 days = diff.days
                 
-                age_str = f"{days}d {int(hours % 24)}h"
+                if days > max_age_days or (days == max_age_days and int(hours % 24) > max_age_hours):
+                    max_age_days = days
+                    max_age_hours = int(hours % 24)
                 
-                if days > 2:
-                    tag = "age_yellow"
-                else:
+                age_str = f"{days}d {int(hours % 24)}h"
+                if dt_obj == pn_oldest_dt.get(pn):
+                    age_str += " ⭐"
+                
+                if days < 2:
                     tag = "age_green"
-                    
+                    age_counts["< 2 Days"] += 1
+                elif days <= 7:
+                    tag = "age_yellow"
+                    age_counts["2-7 Days"] += 1
+                else:
+                    tag = "age_red"
+                    age_counts["> 7 Days"] += 1
             except Exception:
                 age_str = "Unknown"
                 tag = "age_green"
+                age_counts["< 2 Days"] += 1
                 
-            vals = (row[0], row[1], row[2], row[3], age_str, row[4])
+            vals = (row[0], pn, row[2], age_str, row[4])
             self.tree_inv_det.insert("", "end", values=vals, tags=(tag,))
+            
+        # Update Quick Stats
+        if hasattr(self, 'lbl_stat_total'):
+            self.lbl_stat_total.config(text=str(total_boxes))
+            self.lbl_stat_oldest.config(text=f"{max_age_days}d {max_age_hours}h")
+            self.lbl_stat_low.config(text=str(low_wip_count))
+            
+        # Update Charts
+        if MATPLOTLIB_AVAILABLE and hasattr(self, 'ax_wip'):
+            self.ax_wip.clear()
+            self.style_ax(self.ax_wip, "")
+            if part_labels:
+                top_part = part_labels[:8]
+                top_qty = qty_values[:8]
+                top_min = min_values[:8]
+                
+                x = np.arange(len(top_part))
+                width = 0.35
+                
+                rects1 = self.ax_wip.bar(x - width/2, top_qty, width, color='#38C958')
+                rects2 = self.ax_wip.bar(x + width/2, top_min, width, color='#FFA000')
+                
+                for rect in rects1 + rects2:
+                    height = rect.get_height()
+                    if height > 0:
+                        self.ax_wip.annotate(f"{int(height)}",
+                                             xy=(rect.get_x() + rect.get_width() / 2, height),
+                                             xytext=(0, 3),
+                                             textcoords="offset points",
+                                             ha='center', va='bottom', color=TEXT_COLOR, fontsize=8)
+                
+                self.ax_wip.set_xticks(x)
+                self.ax_wip.set_xticklabels(top_part, rotation=20, ha='right', fontsize=8)
+                self.ax_wip.tick_params(axis='y', labelsize=8)
+            else:
+                self.ax_wip.text(0.5, 0.5, "No Data", color=TEXT_MUTED, ha="center")
+            self.fig_wip.subplots_adjust(left=0.35, right=0.95, top=0.90, bottom=0.35)
+            self.render_chart_to_label(self.fig_wip, self.lbl_chart_wip)
+
+        if hasattr(self, 'pick_pn_combo'):
+            self.pick_pn_combo['values'] = full_pns
+
+
+    def render_chart_to_label(self, fig, label_widget):
+        if not MATPLOTLIB_AVAILABLE: return
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        rgba = np.asarray(canvas.buffer_rgba())
+        img = Image.fromarray(rgba)
+        photo = ImageTk.PhotoImage(img)
+        label_widget.configure(image=photo)
+        label_widget.image = photo
 
     def style_ax(self, ax, title):
         ax.set_facecolor(SURFACE_COLOR)
@@ -2748,34 +3346,15 @@ class TraceabilityApp(tk.Tk):
             spine.set_color(BORDER_COLOR)
 
     def build_tab3(self):
-        self.tab3_canvas = tk.Canvas(self.tab3, bg=BG_COLOR)
-        self.tab3_scrollbar = ttk.Scrollbar(self.tab3, orient="vertical", command=self.tab3_canvas.yview)
-        self.tab3_scrollable_frame = tk.Frame(self.tab3_canvas, bg=BG_COLOR)
+        main_frame = tk.Frame(self.tab3, bg=BG_COLOR)
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.tab3_scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.tab3_canvas.configure(
-                scrollregion=self.tab3_canvas.bbox("all")
-            )
-        )
-
-        self.t3_window = self.tab3_canvas.create_window((0, 0), window=self.tab3_scrollable_frame, anchor="nw")
-        
-        self.tab3_canvas.bind(
-            "<Configure>",
-            lambda e: self.tab3_canvas.itemconfig(self.t3_window, width=e.width)
-        )
-        self.tab3_canvas.configure(yscrollcommand=self.tab3_scrollbar.set)
-
-        self.tab3_canvas.pack(side="left", fill="both", expand=True)
-        self.tab3_scrollbar.pack(side="right", fill="y")
-        
         if not MATPLOTLIB_AVAILABLE:
-            tk.Label(self.tab3_scrollable_frame, text=" Matplotlib is required to view KPIs.\nPlease run 'pip install matplotlib' and restart.", bg=BG_COLOR, fg=ERROR_COLOR, font=HMI_FONT_L).pack(pady=50, padx=50)
+            tk.Label(main_frame, text=" Matplotlib is required to view KPIs.\nPlease run 'pip install matplotlib' and restart.", bg=BG_COLOR, fg=ERROR_COLOR, font=HMI_FONT_L).pack(pady=50, padx=50)
             return
-            
+
         # Top Cards Row
-        self.kpi_cards_frame = tk.Frame(self.tab3_scrollable_frame, bg=BG_COLOR)
+        self.kpi_cards_frame = tk.Frame(main_frame, bg=BG_COLOR)
         self.kpi_cards_frame.pack(fill=tk.X, pady=10, padx=20)
         
         self.lbl_kpi_total = tk.Label(self.kpi_cards_frame, text="Daily Total: 0", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L, padx=20, pady=10)
@@ -2784,68 +3363,93 @@ class TraceabilityApp(tk.Tk):
         self.lbl_kpi_top_op = tk.Label(self.kpi_cards_frame, text="Top Operator: -", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L, padx=20, pady=10)
         self.lbl_kpi_top_op.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=10)
         
-        # Charts Area
-        self.charts_frame_1 = tk.Frame(self.tab3_scrollable_frame, bg=BG_COLOR)
-        self.charts_frame_1.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
+        self.lbl_kpi_oee = tk.Label(self.kpi_cards_frame, text="Quality: - | Perf: -", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L, padx=20, pady=10)
+        self.lbl_kpi_oee.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=10)
         
-        self.fig_hourly = Figure(figsize=(5, 3), dpi=100)
-        self.ax_hourly = self.fig_hourly.add_subplot(111)
-        self.canvas_hourly = FigureCanvasTkAgg(self.fig_hourly, master=self.charts_frame_1)
-        self.canvas_hourly.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
-        
-        self.fig_shift = Figure(figsize=(5, 3), dpi=100)
-        self.ax_shift = self.fig_shift.add_subplot(111)
-        self.canvas_shift = FigureCanvasTkAgg(self.fig_shift, master=self.charts_frame_1)
-        self.canvas_shift.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
-        
-        self.charts_frame_2 = tk.Frame(self.tab3_scrollable_frame, bg=BG_COLOR)
-        self.charts_frame_2.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
-        
-        self.fig_op = Figure(figsize=(5, 3), dpi=100)
-        self.ax_op = self.fig_op.add_subplot(111)
-        self.canvas_op = FigureCanvasTkAgg(self.fig_op, master=self.charts_frame_2)
-        self.canvas_op.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
-        
-        self.fig_pn = Figure(figsize=(5, 3), dpi=100)
-        self.ax_pn = self.fig_pn.add_subplot(111)
-        self.canvas_pn = FigureCanvasTkAgg(self.fig_pn, master=self.charts_frame_2)
-        self.canvas_pn.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
-        controls_frame = tk.Frame(self.tab3_scrollable_frame, bg=BG_COLOR)
-        controls_frame.pack(pady=10)
-        
+        controls_frame = tk.Frame(main_frame, bg=BG_COLOR)
+        controls_frame.pack(pady=5)
+
         tk.Label(controls_frame, text="Select Date:", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(side=tk.LEFT, padx=10)
         self.kpi_date_entry = DateEntry(controls_frame, width=12, background=ACCENT_COLOR, foreground='white', borderwidth=2)
         self.kpi_date_entry.pack(side=tk.LEFT, padx=10)
-        
+
         tk.Label(controls_frame, text="Shift:", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(side=tk.LEFT, padx=10)
         self.cb_kpi_shift = ttk.Combobox(controls_frame, values=["All", "A", "B", "C"], state="readonly", width=8, font=HMI_FONT_M)
         self.cb_kpi_shift.pack(side=tk.LEFT, padx=5)
-        
+
         user_role = getattr(self, 'app_user_role', 'Operator')
         if user_role in ["Admin", "Supervisor", "Quality OP"]:
             self.cb_kpi_shift.set("All")
         else:
             self.cb_kpi_shift.set(getattr(self, 'app_user_shift', 'A'))
-        
+
         ttk.Button(controls_frame, text="Refresh KPIs", style="Primary.TButton", command=self.refresh_kpis).pack(side=tk.LEFT, padx=10)
+
+        # Notebook for Charts
+        self.kpi_notebook = ttk.Notebook(main_frame)
+        self.kpi_notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        self.kpi_tab_daily = tk.Frame(self.kpi_notebook, bg=BG_COLOR)
+        self.kpi_tab_trends = tk.Frame(self.kpi_notebook, bg=BG_COLOR)
+        
+        self.kpi_notebook.add(self.kpi_tab_daily, text="Daily Production KPIs")
+        self.kpi_notebook.add(self.kpi_tab_trends, text="30-Day WIP Trends")
+
+        # Charts Area (Daily)
+        self.charts_frame_1 = tk.Frame(self.kpi_tab_daily, bg=BG_COLOR)
+        self.charts_frame_1.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
+        
+        self.fig_hourly = Figure(figsize=(5, 3), dpi=100)
+        self.ax_hourly = self.fig_hourly.add_subplot(111)
+        self.lbl_chart_hourly = tk.Label(self.charts_frame_1, bg=BG_COLOR)
+        self.lbl_chart_hourly.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        
+        self.fig_shift = Figure(figsize=(5, 3), dpi=100)
+        self.ax_shift = self.fig_shift.add_subplot(111)
+        self.lbl_chart_shift = tk.Label(self.charts_frame_1, bg=BG_COLOR)
+        self.lbl_chart_shift.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+
+        self.charts_frame_2 = tk.Frame(self.kpi_tab_daily, bg=BG_COLOR)
+        self.charts_frame_2.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
+        
+        self.fig_op = Figure(figsize=(5, 3), dpi=100)
+        self.ax_op = self.fig_op.add_subplot(111)
+        self.lbl_chart_op = tk.Label(self.charts_frame_2, bg=BG_COLOR)
+        self.lbl_chart_op.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        
+        self.fig_pn = Figure(figsize=(5, 3), dpi=100)
+        self.ax_pn = self.fig_pn.add_subplot(111)
+        self.lbl_chart_pn = tk.Label(self.charts_frame_2, bg=BG_COLOR)
+        self.lbl_chart_pn.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        
+        # 30-Day Trend Chart Area (Trends)
+        tk.Label(self.kpi_tab_trends, text="WIP Trend Analysis (Last 30 Days)", bg=BG_COLOR, fg=ACCENT_COLOR, font=HMI_FONT_L).pack(pady=(20, 5))
+        self.charts_frame_3 = tk.Frame(self.kpi_tab_trends, bg=BG_COLOR)
+        self.charts_frame_3.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
+        
+        self.fig_trend = Figure(figsize=(10, 3), dpi=100)
+        self.ax_trend = self.fig_trend.add_subplot(111)
+        self.lbl_chart_trend = tk.Label(self.charts_frame_3, bg=BG_COLOR)
+        self.lbl_chart_trend.pack(fill=tk.BOTH, expand=True, padx=10)
         
         # Style all figures
         for fig, ax, title in [(self.fig_hourly, self.ax_hourly, "Hourly Production"),
                                (self.fig_shift, self.ax_shift, "Shift Output"),
                                (self.fig_op, self.ax_op, "Operator Mix"),
-                               (self.fig_pn, self.ax_pn, "Product Mix")]:
+                               (self.fig_pn, self.ax_pn, "Product Mix"),
+                               (self.fig_trend, self.ax_trend, "30-Day WIP Accumulation by Part Number")]:
             fig.patch.set_facecolor(BG_COLOR)
             self.style_ax(ax, title)
             
-        self.canvas_hourly.draw()
-        self.canvas_shift.draw()
-        self.canvas_op.draw()
-        self.canvas_pn.draw()
+        self.render_chart_to_label(self.fig_hourly, self.lbl_chart_hourly)
+        self.render_chart_to_label(self.fig_shift, self.lbl_chart_shift)
+        self.render_chart_to_label(self.fig_op, self.lbl_chart_op)
+        self.render_chart_to_label(self.fig_pn, self.lbl_chart_pn)
+        self.render_chart_to_label(self.fig_trend, self.lbl_chart_trend)
             
     def refresh_kpis(self):
         if not MATPLOTLIB_AVAILABLE:
             return
-            
         try:
             conn = get_db_connection()
             c = conn.cursor()
@@ -2879,6 +3483,29 @@ class TraceabilityApp(tk.Tk):
             top_op_txt = f"{top_op[0]} ({top_op[1]})" if top_op else "-"
             self.lbl_kpi_top_op.config(text=f"Top Operator: {top_op_txt}")
             
+            # OEE Calculations
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='quality_defects'")
+            has_qual = c.fetchone()
+            defective_qty = 0
+            if has_qual:
+                c.execute(f"SELECT SUM(qty_defective) FROM quality_defects WHERE reported_at >= ? AND reported_at <= ?{shift_cond}", [start_dt, end_dt] + shift_params)
+                res_def = c.fetchone()
+                defective_qty = res_def[0] or 0
+                
+            qual_rate = ((total_daily - defective_qty) / total_daily * 100) if total_daily > 0 else 0
+            
+            # Fetch Targets
+            c.execute("SELECT product_pn, target_qty FROM shift_targets ORDER BY id ASC")
+            pn_targets_dict = {}
+            for row in c.fetchall():
+                pn, tqty = row
+                pn_targets_dict[pn] = tqty
+                
+            total_target = sum(pn_targets_dict.values())
+                    
+            perf_rate = (total_daily / total_target * 100) if total_target > 0 else 0
+            self.lbl_kpi_oee.config(text=f"Quality: {qual_rate:.1f}% | Perf: {perf_rate:.1f}%")
+            
             # 3. Hourly Production
             self.ax_hourly.clear()
             self.style_ax(self.ax_hourly, "Hourly Production")
@@ -2897,25 +3524,52 @@ class TraceabilityApp(tk.Tk):
             
             self.ax_hourly.grid(True, color=BORDER_COLOR, alpha=0.3)
             self.ax_hourly.set_xticks(hrs[::2])
-            self.canvas_hourly.draw()
+            self.render_chart_to_label(self.fig_hourly, self.lbl_chart_hourly)
             
-            # 4. Shift Comparison
+            # 4. PN Comparison (Target vs Actual)
             self.ax_shift.clear()
-            self.style_ax(self.ax_shift, "Shift Output")
+            self.style_ax(self.ax_shift, "Actual vs Target per PN")
             
-            c.execute("SELECT shift_sp, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ? GROUP BY shift_sp", (start_dt, end_dt))
-            shift_dict = {row[0]: (row[1] or 0) for row in c.fetchall() if row[0] is not None}
-            shifts = ["A", "B", "C"]
-            sqts = [shift_dict.get(s, 0) for s in shifts]
+            c.execute(f"SELECT pn_sf, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond} GROUP BY pn_sf", [start_dt, end_dt] + shift_params)
+            pn_actuals_dict = {row[0]: (row[1] or 0) for row in c.fetchall() if row[0] is not None}
             
-            bars = self.ax_shift.bar(shifts, sqts, color=SUCCESS_COLOR)
-            max_sqt = max(sqts) if sqts else 0
-            self.ax_shift.set_ylim(bottom=0, top=max(max_sqt * 1.15, 1))
-            for bar in bars:
-                yval = bar.get_height()
-                if yval > 0:
-                    self.ax_shift.text(bar.get_x() + bar.get_width()/2.0, yval + (max_sqt*0.02 if max_sqt>0 else 1), int(yval), va='bottom', ha='center', color=TEXT_COLOR)
-            self.canvas_shift.draw()
+            pns = list(set(pn_actuals_dict.keys()).union(set(pn_targets_dict.keys())))
+            pns = sorted([p for p in pns if pn_actuals_dict.get(p, 0) > 0])
+            
+            sqts = [pn_actuals_dict.get(p, 0) for p in pns]
+            tqts = [pn_targets_dict.get(p, 0) for p in pns]
+            
+            # Use part name from SF_DATA if available, else short part number
+            pn_labels = []
+            for p in pns:
+                if p in SF_DATA and SF_DATA[p][0]:
+                    pn_labels.append(SF_DATA[p][0])
+                else:
+                    pn_labels.append(p.split('-')[-1] if '-' in p else p[:8])
+            
+            x = range(len(pns))
+            width = 0.2
+            
+            if len(pns) > 0:
+                bars1 = self.ax_shift.bar([i - width/2 for i in x], sqts, width, color=SUCCESS_COLOR, label='Actual')
+                bars2 = self.ax_shift.bar([i + width/2 for i in x], tqts, width, color=WARNING_COLOR, label='Target')
+                
+                max_sqt = max(max(sqts) if sqts else 0, max(tqts) if tqts else 0)
+                self.ax_shift.set_ylim(bottom=0, top=max(max_sqt * 1.15, 1))
+                
+                for bars in [bars1, bars2]:
+                    for bar in bars:
+                        yval = bar.get_height()
+                        if yval > 0:
+                            self.ax_shift.text(bar.get_x() + bar.get_width()/2.0, yval + (max_sqt*0.02 if max_sqt>0 else 1), int(yval), va='bottom', ha='center', color=TEXT_COLOR, fontsize=8)
+                            
+                self.ax_shift.set_xticks(x)
+                self.ax_shift.set_xticklabels(pn_labels, rotation=15, fontsize=8)
+                self.ax_shift.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=1, fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
+            else:
+                self.ax_shift.text(0.5, 0.5, "No Data", ha='center', va='center', color=TEXT_MUTED, transform=self.ax_shift.transAxes)
+            self.fig_shift.subplots_adjust(bottom=0.25, top=0.82, right=0.75)
+            self.render_chart_to_label(self.fig_shift, self.lbl_chart_shift)
             
             # 5. Production by Operator Pie
             self.ax_op.clear()
@@ -2927,7 +3581,7 @@ class TraceabilityApp(tk.Tk):
                 ops = [row[0] for row in op_data]
                 o_qts = [row[1] for row in op_data]
                 self.ax_op.pie(o_qts, labels=ops, autopct='%1.1f%%', textprops={'color': TEXT_COLOR})
-            self.canvas_op.draw()
+            self.render_chart_to_label(self.fig_op, self.lbl_chart_op)
             
             # 6. Top PNs Pie
             self.ax_pn.clear()
@@ -2936,10 +3590,51 @@ class TraceabilityApp(tk.Tk):
             c.execute(f"SELECT pn_sf, SUM(quantity) FROM records WHERE dt_sp >= ? AND dt_sp <= ?{shift_cond} GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 5", [start_dt, end_dt] + shift_params)
             pn_data = c.fetchall()
             if pn_data:
-                pns = [row[0] for row in pn_data]
+                pns_labels = []
+                for row in pn_data:
+                    p = row[0]
+                    if p in SF_DATA and SF_DATA[p][0]:
+                        pns_labels.append(SF_DATA[p][0])
+                    else:
+                        pns_labels.append(p.split('-')[-1] if '-' in p else p[:8])
                 p_qts = [row[1] for row in pn_data]
-                self.ax_pn.pie(p_qts, labels=pns, autopct='%1.1f%%', textprops={'color': TEXT_COLOR})
-            self.canvas_pn.draw()
+                self.ax_pn.pie(p_qts, labels=pns_labels, autopct='%1.1f%%', textprops={'color': TEXT_COLOR})
+            self.render_chart_to_label(self.fig_pn, self.lbl_chart_pn)
+
+            # 7. 30-Day WIP Trend Chart
+            self.ax_trend.clear()
+            self.style_ax(self.ax_trend, "30-Day WIP Accumulation by Part Number")
+            thirty_days_ago = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+            c.execute('''SELECT snapshot_date, pn_sf, total_qty_in_rack 
+                         FROM inventory_snapshots 
+                         WHERE snapshot_date >= ?
+                         ORDER BY snapshot_date ASC''', (thirty_days_ago,))
+            trend_data = c.fetchall()
+            
+            if trend_data:
+                pn_series = {}
+                dates_set = set()
+                for r in trend_data:
+                    dt, pn, qty = r
+                    if pn not in pn_series: pn_series[pn] = {}
+                    pn_series[pn][dt] = qty
+                    dates_set.add(dt)
+                
+                sorted_dates = sorted(list(dates_set))
+                x_labels = [d[5:] for d in sorted_dates]
+                
+                for pn, data_dict in pn_series.items():
+                    y_vals = [data_dict.get(d, 0) for d in sorted_dates]
+                    self.ax_trend.plot(x_labels, y_vals, marker='o', markersize=4, label=pn[:15])
+                    
+                self.ax_trend.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=1, fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
+                self.ax_trend.tick_params(axis='x', rotation=45, labelsize=8)
+            else:
+                self.ax_trend.text(0.5, 0.5, "No Snapshot Data Yet\n(Snapshots are taken nightly at 23:50)", ha='center', va='center', color=TEXT_MUTED, transform=self.ax_trend.transAxes)
+                
+            self.fig_trend.subplots_adjust(bottom=0.3, top=0.85, right=0.80)
+            self.render_chart_to_label(self.fig_trend, self.lbl_chart_trend)
+
             
             conn.close()
         except Exception as e:
@@ -3112,8 +3807,97 @@ class TraceabilityApp(tk.Tk):
         else:
             messagebox.showinfo("Info", "Excel file not created yet. Save a record first.")
 
+    def take_snapshot(self, date_str):
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        c.execute('''SELECT pn_sf, SUM(quantity), COUNT(id)
+                     FROM records WHERE status="In Rack" GROUP BY pn_sf''')
+        agg_rows = c.fetchall()
+        
+        c.execute('''SELECT pn_sf, dt_sp FROM records WHERE status="In Rack"''')
+        det_rows = c.fetchall()
+        
+        now = datetime.datetime.now()
+        oldest_dt_per_pn = {}
+        for row in det_rows:
+            pn, dt_str = row
+            try:
+                try:
+                    dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+                if pn not in oldest_dt_per_pn or dt_obj < oldest_dt_per_pn[pn]:
+                    oldest_dt_per_pn[pn] = dt_obj
+            except: pass
+            
+        for row in agg_rows:
+            pn, total_qty, box_count = row
+            oldest_age_hours = 0.0
+            if pn in oldest_dt_per_pn:
+                oldest_age_hours = (now - oldest_dt_per_pn[pn]).total_seconds() / 3600.0
+                
+            c.execute('''INSERT OR REPLACE INTO inventory_snapshots 
+                         (snapshot_date, pn_sf, boxes_in_rack, total_qty_in_rack, oldest_box_age_hours)
+                         VALUES (?, ?, ?, ?, ?)''', 
+                         (date_str, pn, box_count, total_qty, oldest_age_hours))
+        conn.commit()
+        conn.close()
+        print(f"[{datetime.datetime.now()}] Automated Inventory Snapshot Taken for {date_str}.")
+        
+    def schedule_daily_snapshot(self):
+        now = datetime.datetime.now()
+        yesterday = now - datetime.timedelta(days=1)
+        yesterday_str = yesterday.strftime("%Y-%m-%d")
+        
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM inventory_snapshots WHERE snapshot_date=?", (yesterday_str,))
+            count = c.fetchone()[0]
+            conn.close()
+            
+            if count == 0:
+                self.take_snapshot(yesterday_str)
+        except Exception as e:
+            print("Error checking/taking daily snapshot:", e)
+
+        self.after(60000, self.schedule_daily_snapshot)
+
     def on_closing(self):
-        if messagebox.askyesno("Confirm Exit", "Are you sure you want to close the application?"):
+        msg = "Are you sure you want to close the dashboard?\n\n(Automated Reports & Snapshots will continue running in the background)"
+        if messagebox.askyesno("Confirm Exit", msg):
+            self.withdraw_to_tray()
+    def withdraw_to_tray(self):
+        self.withdraw()
+        try:
+            import pystray
+            from PIL import Image
+            import threading
+
+            def show_window(icon, item):
+                icon.stop()
+                self.after(0, self.deiconify)
+
+            def quit_window(icon, item):
+                icon.stop()
+                self.after(0, self.destroy)
+
+            menu = pystray.Menu(
+                pystray.MenuItem('Restore Dashboard', show_window, default=True),
+                pystray.MenuItem('Exit Completely', quit_window)
+            )
+
+            icon_path = resource_path(os.path.join("assets", "taskbar_logo.png"))
+            if os.path.exists(icon_path):
+                image = Image.open(icon_path)
+            else:
+                image = Image.new('RGB', (64, 64), color='red')
+
+            icon = pystray.Icon("traceability", image, "Sub-Process Traceability", menu)
+            threading.Thread(target=icon.run, daemon=True).start()
+
+        except ImportError:
             self.destroy()
 
 if __name__ == "__main__":

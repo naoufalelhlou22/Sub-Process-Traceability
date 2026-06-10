@@ -3,8 +3,16 @@ import sqlite3
 import datetime
 from fpdf import FPDF
 
-DB_FILE = os.path.join("data", "traceability.db")
+import sys
 
+def persistent_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    return os.path.join(base_path, relative_path)
+
+DB_FILE = os.path.join(persistent_path("data"), "traceability.db")
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
     conn.execute('PRAGMA journal_mode=WAL')
@@ -140,7 +148,7 @@ def generate_shift_pdf_report(start_dt, end_dt, shift_label):
     # Output file
     try:
         start_date = start_dt.split(" ")[0]
-        report_dir = os.path.join("reports", start_date)
+        report_dir = os.path.join(persistent_path("reports"), start_date)
         os.makedirs(report_dir, exist_ok=True)
         
         shift_safe = shift_label.replace(":", "-").replace(" ", "_").replace("/", "-")
