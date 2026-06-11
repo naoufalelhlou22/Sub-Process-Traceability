@@ -478,31 +478,31 @@ def generate_zpl(record_data):
     zpl = []
     zpl.append("^XA")
     zpl.append("^PW520")
-    zpl.append("^LH25,0")
+    zpl.append("^LH0,0")
     zpl.append("^CI28")
     
     def draw_layout(offset_y):
-        zpl.append(f"^FO80,{20+offset_y}^A0N,24,24^FDSUB-PROCESS RECORD^FS")
-        zpl.append(f"^FO10,{55+offset_y}^GB460,3,3^FS")
+        zpl.append(f"^FO30,{20+offset_y}^A0N,24,24^FB460,1,0,C^FDSUB-PROCESS RECORD^FS")
+        zpl.append(f"^FO30,{55+offset_y}^GB460,3,3^FS")
         
-        zpl.append(f"^FO10,{70+offset_y}^GB460,40,40^FS")
-        zpl.append(f"^FO10,{80+offset_y}^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
+        zpl.append(f"^FO30,{70+offset_y}^GB460,40,40^FS")
+        zpl.append(f"^FO30,{80+offset_y}^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
         
         sb_id_val = format_val(record_data.get('sub_batch_id'))
-        zpl.append(f"^BY2^FO15,{120+offset_y}^BCN,50,N,N,N,A^FD{sb_id_val}^FS")
+        zpl.append(f"^BY2^FO50,{120+offset_y}^BCN,50,N,N,N,A^FD{sb_id_val}^FS")
         
         y = 185 + offset_y
         def add_row(label, value, font_size=18, y_inc=20):
             nonlocal y
-            zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FD{label}^FS")
-            zpl.append(f"^FO10,{y}^A0N,{font_size},{font_size}^FB460,1,0,R^FD{value}\\&^FS")
+            zpl.append(f"^FO30,{y}^A0N,{font_size},{font_size}^FD{label}^FS")
+            zpl.append(f"^FO30,{y}^A0N,{font_size},{font_size}^FB460,1,0,R^FD{value}\\&^FS")
             y += y_inc
 
         add_row("PN Semi fini", format_val(record_data.get('pn_sf')))
         add_row("Part Name (SF)", format_val(record_data.get('part_sf')))
                 
         y += 3
-        zpl.append(f"^FO10,{y}^GB460,1,1^FS")
+        zpl.append(f"^FO30,{y}^GB460,1,1^FS")
         y += 8
         
         add_row("Batch No. 1", format_val(record_data.get('batch1')))
@@ -511,7 +511,7 @@ def generate_zpl(record_data):
         add_row("Quantity", f"{format_val(record_data.get('quantity'))} pcs", font_size=20, y_inc=22)
         
         y += 3
-        zpl.append(f"^FO10,{y}^GB460,1,1^FS")
+        zpl.append(f"^FO30,{y}^GB460,1,1^FS")
         y += 8
         
         add_row("Shift SP", format_val(record_data.get('shift_sp')))
@@ -526,27 +526,26 @@ def generate_zpl(record_data):
         add_row("Printed At", printed)
         
         y += 3
-        zpl.append(f"^FO10,{y}^GB460,2,2^FS")
+        zpl.append(f"^FO30,{y}^GB460,2,2^FS")
         y += 8
         
         reprints = int(record_data.get('reprint_count') or 0)
         if reprints > 0:
             last_by = record_data.get('last_reprinted_by', 'Unknown')
             last_at = record_data.get('last_reprinted_at', '')[:16] if record_data.get('last_reprinted_at') else ''
-            audit_text = f"** REPRINT #{reprints} by {last_by} at {last_at} **"
-            zpl.append(f"^FO10,{y}^A0N,14,14^FB460,1,0,C^FD{audit_text}\\&^FS")
+            audit_text = f"** REPRINT #{reprints} by OP ID: {last_by} at {last_at} **"
+            zpl.append(f"^FO30,{y}^A0N,14,14^FB460,1,0,C^FD{audit_text}\\&^FS")
         else:
-            zpl.append(f"^FO10,{y}^A0N,14,14^FB460,1,0,C^FD-- Original Print --\\&^FS")
+            zpl.append(f"^FO30,{y}^A0N,14,14^FB460,1,0,C^FD-- Original Print --\\&^FS")
         y += 18
         
-        zpl.append(f"^FO130,{y}^BQN,2,2^FDQA,{json_str}^FS")
-        return y + 110
+        zpl.append(f"^FO160,{y}^BQN,2,2^FDMA,{json_str}^FS")
         
-    end_y = draw_layout(0)
+    draw_layout(0)
     
-    zpl.append(f"^FO10,{end_y}^A0N,20,20^FB460,1,0,C^FD- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -^FS")
+    zpl.append(f"^FO30,728^A0N,20,20^FB460,1,0,C^FD- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -^FS")
     
-    draw_layout(end_y + 30)
+    draw_layout(798)
 
     zpl.append("^PQ1")
     zpl.append("^XZ")
@@ -3139,6 +3138,8 @@ class TraceabilityApp(tk.Tk):
             messagebox.showinfo("Pick List", f"No inventory found in rack for {pn}")
             return
             
+        total_in_rack = sum(r[1] for r in rows)
+            
         picked = []
         accumulated = 0
         for r in rows:
@@ -3159,7 +3160,7 @@ class TraceabilityApp(tk.Tk):
         popup.grab_set()
         
         tk.Label(popup, text=f"FIFO Pick Ticket", font=HMI_FONT_L, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
-        tk.Label(popup, text=f"Part: {pn} | Target: {target_qty} | Actual: {accumulated}", font=HMI_FONT_M, bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=5)
+        tk.Label(popup, text=f"Part: {pn} | Target: {target_qty} | Actual: {total_in_rack}", font=HMI_FONT_M, bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=5)
         
         frame = tk.Frame(popup, bg=SURFACE_COLOR)
         frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
@@ -3172,7 +3173,7 @@ class TraceabilityApp(tk.Tk):
         btn_frame.pack(pady=20)
         
         def print_ticket():
-            zpl_data = generate_pick_ticket_zpl(pn, target_qty, accumulated, picked)
+            zpl_data = generate_pick_ticket_zpl(pn, target_qty, total_in_rack, picked)
             execute_ticket_print(zpl_data, pn)
             
         ttk.Button(btn_frame, text="Print Ticket", style="Accent.TButton", command=print_ticket).pack(side=tk.LEFT, padx=10)

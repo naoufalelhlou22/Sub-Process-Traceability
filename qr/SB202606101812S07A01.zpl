@@ -1,39 +1,75 @@
 ^XA
-^PW480
+^PW520
+^LH0,0
 ^CI28
-^FO80,20^A0N,24,24^FDSUB-PROCESS RECORD^FS
-^FO10,55^GB460,3,3^FS
-^FO10,70^GB460,40,40^FS
-^FO10,80^A0N,24,24^FR^FB460,1,0,C^FDSB202606101812S07A01\&^FS
-^BY2^FO15,120^BCN,50,N,N,N,A^FDSB202606101812S07A01^FS
-^FO10,185^A0N,18,18^FDPN Semi fini^FS
-^FO10,185^A0N,18,18^FB460,1,0,R^FDMOCK-B02-20005-X-SUB\&^FS
-^FO10,205^A0N,18,18^FDPart Name (SF)^FS
-^FO10,205^A0N,18,18^FB460,1,0,R^FDBeta Panel Left Sub V2\&^FS
-^FO10,228^GB460,1,1^FS
-^FO10,236^A0N,18,18^FDBatch No. 1^FS
-^FO10,236^A0N,18,18^FB460,1,0,R^FDYTYTT\&^FS
-^FO10,256^A0N,18,18^FDBatch No. 2^FS
-^FO10,256^A0N,18,18^FB460,1,0,R^FD-\&^FS
-^FO10,276^A0N,18,18^FDBatch No. 3^FS
-^FO10,276^A0N,18,18^FB460,1,0,R^FD-\&^FS
-^FO10,296^A0N,20,20^FDQuantity^FS
-^FO10,296^A0N,20,20^FB460,1,0,R^FD1348 pcs\&^FS
-^FO10,321^GB460,1,1^FS
-^FO10,329^A0N,18,18^FDShift SP^FS
-^FO10,329^A0N,18,18^FB460,1,0,R^FDA\&^FS
-^FO10,349^A0N,18,18^FDOp ID^FS
-^FO10,349^A0N,18,18^FB460,1,0,R^FD333\&^FS
-^FO10,369^A0N,18,18^FDStation^FS
-^FO10,369^A0N,18,18^FB460,1,0,R^FDS07\&^FS
-^FO10,389^A0N,18,18^FDSP Date/Time^FS
-^FO10,389^A0N,18,18^FB460,1,0,R^FD2026-06-10 18:12\&^FS
-^FO10,409^A0N,18,18^FDLine Entry^FS
-^FO10,409^A0N,18,18^FB460,1,0,R^FD-\&^FS
-^FO10,429^A0N,18,18^FDPrinted At^FS
-^FO10,429^A0N,18,18^FB460,1,0,R^FD2026-06-10 18:12\&^FS
-^FO10,452^GB460,2,2^FS
-^FO10,460^A0N,14,14^FB460,1,0,C^FD-- Original Print --\&^FS
-^FO130,478^BQN,2,2^FDQA,{"sub_batch_id": "SB202606101812S07A01", "full_pn_sf": "MOCK-B02-20005-X-SUB", "part_name_sf": "Beta Panel Left Sub V2", "rm1_pn": "MOCK-B02-20005-Y-PRT", "rm1_name": "Beta Panel (Upgraded) Left", "rm2_pn": "MOCK-B02-20002-Z-PRT", "rm2_name": "Beta Sealant", "rm3_pn": "", "rm3_name": "", "rm4_pn": "", "rm4_name": "", "batch_no_1": "YTYTT", "batch_no_2": "", "batch_no_3": "", "quantity": 1348, "sub_process_shift": "A", "op_id": "333", "station": "S07", "sub_process_datetime": "2026-06-10 18:12", "production_line_entry_datetime": "", "production_line_shift": "", "remarks": ""}^FS
-^PQ2
+^FO30,20^A0N,24,24^FB460,1,0,C^FDSUB-PROCESS RECORD^FS
+^FO30,55^GB460,3,3^FS
+^FO30,70^GB460,40,40^FS
+^FO30,80^A0N,24,24^FR^FB460,1,0,C^FDSB202606101812S07A01\&^FS
+^BY2^FO50,120^BCN,50,N,N,N,A^FDSB202606101812S07A01^FS
+^FO30,185^A0N,18,18^FDPN Semi fini^FS
+^FO30,185^A0N,18,18^FB460,1,0,R^FDMOCK-B02-20005-X-SUB\&^FS
+^FO30,205^A0N,18,18^FDPart Name (SF)^FS
+^FO30,205^A0N,18,18^FB460,1,0,R^FDBeta Panel Left Sub V2\&^FS
+^FO30,228^GB460,1,1^FS
+^FO30,236^A0N,18,18^FDBatch No. 1^FS
+^FO30,236^A0N,18,18^FB460,1,0,R^FDYTYTT\&^FS
+^FO30,256^A0N,18,18^FDBatch No. 2^FS
+^FO30,256^A0N,18,18^FB460,1,0,R^FD-\&^FS
+^FO30,276^A0N,18,18^FDBatch No. 3^FS
+^FO30,276^A0N,18,18^FB460,1,0,R^FD-\&^FS
+^FO30,296^A0N,20,20^FDQuantity^FS
+^FO30,296^A0N,20,20^FB460,1,0,R^FD1348 pcs\&^FS
+^FO30,321^GB460,1,1^FS
+^FO30,329^A0N,18,18^FDShift SP^FS
+^FO30,329^A0N,18,18^FB460,1,0,R^FDA\&^FS
+^FO30,349^A0N,18,18^FDOp ID^FS
+^FO30,349^A0N,18,18^FB460,1,0,R^FD333\&^FS
+^FO30,369^A0N,18,18^FDStation^FS
+^FO30,369^A0N,18,18^FB460,1,0,R^FDS07\&^FS
+^FO30,389^A0N,18,18^FDSP Date/Time^FS
+^FO30,389^A0N,18,18^FB460,1,0,R^FD2026-06-10 18:12\&^FS
+^FO30,409^A0N,18,18^FDLine Entry^FS
+^FO30,409^A0N,18,18^FB460,1,0,R^FD-\&^FS
+^FO30,429^A0N,18,18^FDPrinted At^FS
+^FO30,429^A0N,18,18^FB460,1,0,R^FD2026-06-11 20:22\&^FS
+^FO30,452^GB460,2,2^FS
+^FO30,460^A0N,14,14^FB460,1,0,C^FD** REPRINT #2 by 1 at 2026-06-11 20:22 **\&^FS
+^FO200,478^BQN,2,2^FDMA,{"sub_batch_id": "SB202606101812S07A01", "full_pn_sf": "MOCK-B02-20005-X-SUB", "part_name_sf": "Beta Panel Left Sub V2", "rm1_pn": "MOCK-B02-20005-Y-PRT", "rm1_name": "Beta Panel (Upgraded) Left", "rm2_pn": "MOCK-B02-20002-Z-PRT", "rm2_name": "Beta Sealant", "rm3_pn": "", "rm3_name": "", "rm4_pn": "", "rm4_name": "", "batch_no_1": "YTYTT", "batch_no_2": "", "batch_no_3": "", "quantity": 1348, "sub_process_shift": "A", "op_id": "333", "station": "S07", "sub_process_datetime": "2026-06-10 18:12", "production_line_entry_datetime": "", "production_line_shift": "", "remarks": ""}^FS
+^FO30,728^A0N,20,20^FB460,1,0,C^FD- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -^FS
+^FO30,818^A0N,24,24^FB460,1,0,C^FDSUB-PROCESS RECORD^FS
+^FO30,853^GB460,3,3^FS
+^FO30,868^GB460,40,40^FS
+^FO30,878^A0N,24,24^FR^FB460,1,0,C^FDSB202606101812S07A01\&^FS
+^BY2^FO50,918^BCN,50,N,N,N,A^FDSB202606101812S07A01^FS
+^FO30,983^A0N,18,18^FDPN Semi fini^FS
+^FO30,983^A0N,18,18^FB460,1,0,R^FDMOCK-B02-20005-X-SUB\&^FS
+^FO30,1003^A0N,18,18^FDPart Name (SF)^FS
+^FO30,1003^A0N,18,18^FB460,1,0,R^FDBeta Panel Left Sub V2\&^FS
+^FO30,1026^GB460,1,1^FS
+^FO30,1034^A0N,18,18^FDBatch No. 1^FS
+^FO30,1034^A0N,18,18^FB460,1,0,R^FDYTYTT\&^FS
+^FO30,1054^A0N,18,18^FDBatch No. 2^FS
+^FO30,1054^A0N,18,18^FB460,1,0,R^FD-\&^FS
+^FO30,1074^A0N,18,18^FDBatch No. 3^FS
+^FO30,1074^A0N,18,18^FB460,1,0,R^FD-\&^FS
+^FO30,1094^A0N,20,20^FDQuantity^FS
+^FO30,1094^A0N,20,20^FB460,1,0,R^FD1348 pcs\&^FS
+^FO30,1119^GB460,1,1^FS
+^FO30,1127^A0N,18,18^FDShift SP^FS
+^FO30,1127^A0N,18,18^FB460,1,0,R^FDA\&^FS
+^FO30,1147^A0N,18,18^FDOp ID^FS
+^FO30,1147^A0N,18,18^FB460,1,0,R^FD333\&^FS
+^FO30,1167^A0N,18,18^FDStation^FS
+^FO30,1167^A0N,18,18^FB460,1,0,R^FDS07\&^FS
+^FO30,1187^A0N,18,18^FDSP Date/Time^FS
+^FO30,1187^A0N,18,18^FB460,1,0,R^FD2026-06-10 18:12\&^FS
+^FO30,1207^A0N,18,18^FDLine Entry^FS
+^FO30,1207^A0N,18,18^FB460,1,0,R^FD-\&^FS
+^FO30,1227^A0N,18,18^FDPrinted At^FS
+^FO30,1227^A0N,18,18^FB460,1,0,R^FD2026-06-11 20:22\&^FS
+^FO30,1250^GB460,2,2^FS
+^FO30,1258^A0N,14,14^FB460,1,0,C^FD** REPRINT #2 by 1 at 2026-06-11 20:22 **\&^FS
+^FO200,1276^BQN,2,2^FDMA,{"sub_batch_id": "SB202606101812S07A01", "full_pn_sf": "MOCK-B02-20005-X-SUB", "part_name_sf": "Beta Panel Left Sub V2", "rm1_pn": "MOCK-B02-20005-Y-PRT", "rm1_name": "Beta Panel (Upgraded) Left", "rm2_pn": "MOCK-B02-20002-Z-PRT", "rm2_name": "Beta Sealant", "rm3_pn": "", "rm3_name": "", "rm4_pn": "", "rm4_name": "", "batch_no_1": "YTYTT", "batch_no_2": "", "batch_no_3": "", "quantity": 1348, "sub_process_shift": "A", "op_id": "333", "station": "S07", "sub_process_datetime": "2026-06-10 18:12", "production_line_entry_datetime": "", "production_line_shift": "", "remarks": ""}^FS
+^PQ1
 ^XZ
