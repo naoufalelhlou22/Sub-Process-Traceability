@@ -10,6 +10,22 @@ from tkcalendar import DateEntry
 from openpyxl import Workbook, load_workbook
 import sys
 import threading
+import queue
+
+_excel_queue = queue.Queue()
+
+def _excel_worker():
+    while True:
+        func, args, kwargs = _excel_queue.get()
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            print(f"Excel worker error: {e}")
+        finally:
+            _excel_queue.task_done()
+
+_excel_thread = threading.Thread(target=_excel_worker, daemon=True)
+_excel_thread.start()
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import report_generator
 
@@ -167,10 +183,36 @@ def get_db_connection():
 import hashlib
 import binascii
 
-def hash_password(password):
-  salt = b"subproc_trace_salt_2026"
-  hash_obj = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
-  return binascii.hexlify(hash_obj).decode("utf-8")
+def hash_password(password: str, salt: bytes = None) -> str:
+  if salt is None:
+    salt = os.urandom(32)
+  key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 310_000)
+  return binascii.hexlify(salt).decode() + ":" + binascii.hexlify(key).decode()
+
+def verify_password(password: str, stored: str) -> bool:
+  try:
+    if ":" not in stored:
+      return False
+    salt_hex, key_hex = stored.split(":")
+    salt = binascii.unhexlify(salt_hex)
+    
+    # 1. Normal check (new schema)
+    expected = hash_password(password, salt)
+    if expected == stored:
+      return True
+      
+    # 2. Migration fallback check (double-hashed from old static salt schema)
+    old_salt = b"subproc_trace_salt_2026"
+    old_hash_obj = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), old_salt, 100000)
+    old_hash_str = binascii.hexlify(old_hash_obj).decode("utf-8")
+    
+    expected_old = hash_password(old_hash_str, salt)
+    if expected_old == stored:
+      return True
+      
+    return False
+  except Exception:
+    return False
 
 def migrate_passwords():
   conn = get_db_connection()
@@ -179,7 +221,7 @@ def migrate_passwords():
   rows = c.fetchall()
   for row in rows:
     uid, pwd = row
-    if pwd and (len(pwd) != 64 or not all(ch in "0123456789abcdef" for ch in pwd)):
+    if pwd and ":" not in pwd:
       hashed = hash_password(pwd)
       c.execute("UPDATE auth SET password = ? WHERE id = ?", (hashed, uid))
   conn.commit()
@@ -233,15 +275,29 @@ def init_db():
       role TEXT
     )
   ''')
+
+  c.execute('''
+    CREATE TABLE IF NOT EXISTS schema_version (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  ''')
+  c.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (1)")
   
   try:
-    c.executemany("INSERT OR IGNORE INTO auth (id, password, role) VALUES (?, ?, ?)", [
-      ('s', ' ', 'Supervisor'),
-      ('sp99', 'sp99', 'Supervisor'),
-      ('sl', 'sl98', 'Shift Leader'),
-      ('op1', 'op1', 'Operator'),
-      ('mg90', 'oi90', 'Manager')
-    ])
+    import os
+    default_users = [
+      ('mg90', os.environ.get('MANAGER_PASS', 'oi90'), 'Manager'),
+      ('sp99', os.environ.get('SUPERVISOR_PASS', 'sp99'), 'Supervisor'),
+      ('sl', os.environ.get('SHIFT_LEADER_PASS', 'sl98'), 'Shift Leader'),
+      ('op1', os.environ.get('OPERATOR_PASS', 'op1'), 'Operator')
+    ]
+    for uid, plain_pwd, role in default_users:
+      c.execute("INSERT OR IGNORE INTO auth (id, password, role) VALUES (?, ?, ?)", (uid, hash_password(plain_pwd), role))
+    
+    # Also inserting the 's' supervisor from original if not overridden
+    c.execute("INSERT OR IGNORE INTO auth (id, password, role) VALUES (?, ?, ?)", ('s', hash_password(' '), 'Supervisor'))
+    
     conn.commit()
   except Exception as e:
     print("Auth seed error:", e)
@@ -394,8 +450,9 @@ def rebuild_excel_from_db():
     
   ws.row_dimensions[1].height = 34
   widths = [20, 22, 25, 22, 25, 12, 12, 12, 10, 15, 10, 10, 20, 20, 15, 25, 15]
+  from openpyxl.utils import get_column_letter
   for i, w in enumerate(widths, start=1):
-    ws.column_dimensions[chr(64 + i)].width = w
+    ws.column_dimensions[get_column_letter(i)].width = w
 
   conn = get_db_connection()
   conn.row_factory = sqlite3.Row
@@ -758,8 +815,8 @@ class TraceabilityApp(tk.Tk):
     self.configure(bg=BG_COLOR)
     self.protocol("WM_DELETE_WINDOW", self.on_closing)
     self.schedule_daily_snapshot()
-    self.check_and_generate_missed_reports()
-    add_to_startup()
+    self.after(5000, self.check_and_generate_missed_reports)
+    # add_to_startup() removed to prevent automatic registry changes
     
     # Modern Windows 11 Title Bar Color (White background, Blue text)
     try:
@@ -906,9 +963,14 @@ class TraceabilityApp(tk.Tk):
       try:
         conn = get_db_connection()
         c = conn.cursor()
-        c.execute("SELECT role FROM auth WHERE id = ? AND password = ?", (uid, hash_password(upass)))
+        c.execute("SELECT password, role FROM auth WHERE id = ?", (uid,))
         result = c.fetchone()
         conn.close()
+        
+        if result and not verify_password(upass, result[0]):
+          result = None
+        elif result:
+          result = (result[1],)
       except Exception as e:
         messagebox.showerror("DB Error", f"Failed to connect to authentication database:\n{e}", parent=login_win)
         return
@@ -1725,21 +1787,27 @@ class TraceabilityApp(tk.Tk):
       pass
       
   def _check_quality_rate(self):
-    try:
-      conn = get_db_connection()
-      c = conn.cursor()
-      today = datetime.datetime.now().strftime("%Y-%m-%d")
-      
-      c.execute("SELECT COUNT(*) FROM quality_defects WHERE reported_at LIKE ?", (f"{today}%",))
-      krow = c.fetchone()
-      total_def_today = krow[0] or 0
-      
-      c.execute("SELECT SUM(quantity) FROM records WHERE dt_sp LIKE ?", (f"{today}%",))
-      prod_res = c.fetchone()
-      total_prod = prod_res[0] or 0
-      
-      conn.close()
-      
+    def _fetch_data():
+      try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        
+        c.execute("SELECT COUNT(*) FROM quality_defects WHERE reported_at LIKE ?", (f"{today}%",))
+        krow = c.fetchone()
+        total_def_today = krow[0] or 0
+        
+        c.execute("SELECT SUM(quantity) FROM records WHERE dt_sp LIKE ?", (f"{today}%",))
+        prod_res = c.fetchone()
+        total_prod = prod_res[0] or 0
+        
+        conn.close()
+        return total_def_today, total_prod
+      except Exception:
+        return 0, 0
+
+    def _update_ui(result):
+      total_def_today, total_prod = result
       if total_prod > 0:
         rate = (total_def_today / total_prod) * 100
         if rate > 3.0:
@@ -1748,9 +1816,14 @@ class TraceabilityApp(tk.Tk):
           self.lbl_quality_alert.pack_forget()
       else:
         self.lbl_quality_alert.pack_forget()
-    except Exception:
-      pass
-      
+
+    def _run():
+      result = _fetch_data()
+      self.after(0, lambda: _update_ui(result))
+
+    import threading
+    threading.Thread(target=_run, daemon=True).start()
+
     try:
       self.after(60000, self._check_quality_rate)
     except Exception:
@@ -1950,12 +2023,21 @@ class TraceabilityApp(tk.Tk):
       cb_live = ttk.Checkbutton(frame, text="Live", variable=live_var)
       cb_live.pack(side=tk.LEFT, padx=10)
       
+      after_id = [None]
       def auto_update():
+        if not parent.winfo_exists():
+          return
         if live_var.get():
           set_now()
-        parent.after(1000, auto_update)
+        after_id[0] = parent.after(1000, auto_update)
         
-      def stop_live(*args): live_var.set(False)
+      def stop_live(*args):
+        live_var.set(False)
+        if after_id[0]:
+          parent.after_cancel(after_id[0])
+          after_id[0] = None
+
+      parent.bind("<Destroy>", lambda e: stop_live(), add="+")
       de.bind("<<DateEntrySelected>>", stop_live)
       h_spin.bind("<Button-1>", stop_live)
       h_spin.bind("<Key>", stop_live)
@@ -2585,14 +2667,14 @@ class TraceabilityApp(tk.Tk):
       
       shift_ended = False
       
-      if wd in [0, 1, 2, 3, 5]:
+      if wd in [0, 1, 2, 3]:
         if (h == 14 and m == 0) or (h == 22 and m == 0) or (h == 6 and m == 0):
           shift_ended = True
       elif wd == 4: # Friday
         if (h == 12 and m == 0) or (h == 18 and m == 30) or (h == 6 and m == 0):
           shift_ended = True
-      elif wd == 6: # Sunday
-        if h == 6 and m == 0: # end of Saturday night shift
+      elif wd == 5: # Saturday
+        if h == 6 and m == 0: # end of Friday night shift
           shift_ended = True
           
       if shift_ended:
@@ -2650,9 +2732,14 @@ class TraceabilityApp(tk.Tk):
 
 
   def update_stats(self):
-    PROD_RATES = {
-      "MOCK-A01-10001-X-SUB": 240
-    }
+    try:
+      conn = get_db_connection()
+      c = conn.cursor()
+      c.execute("SELECT product_pn, AVG(target_qty) FROM shift_targets GROUP BY product_pn")
+      PROD_RATES = {row[0]: int(row[1] or 120) for row in c.fetchall()}
+      conn.close()
+    except Exception:
+      PROD_RATES = {}
     DEFAULT_RATE = 120 # default hourly rate if PN is not in PROD_RATES
 
     now = datetime.datetime.now()
@@ -2872,8 +2959,8 @@ class TraceabilityApp(tk.Tk):
 
   def background_excel_save(self, excel_data):
     try:
-      save_to_excel(excel_data)
-      self.export_kpis_to_excel()
+      _excel_queue.put((save_to_excel, (excel_data,), {}))
+      _excel_queue.put((self.export_kpis_to_excel, (), {}))
     except Exception as e:
       print(f"Background Excel Save Error: {e}")
 
@@ -2916,10 +3003,12 @@ class TraceabilityApp(tk.Tk):
     conn = get_db_connection()
     c = conn.cursor()
     
+    import uuid
     base_sb_id = f"SB{dt_sp.replace('-', '').replace(':', '').replace(' ', '')}{station}{shift_sp[0] if shift_sp else ''}"
+    uid = uuid.uuid4().hex[:4].upper()
     c.execute("SELECT COUNT(*) FROM records WHERE sub_batch_id LIKE ?", (base_sb_id + "%",))
     count = c.fetchone()[0]
-    sb_id = f"{base_sb_id}{count+1:02d}"
+    sb_id = f"{base_sb_id}{count+1:02d}{uid}"
 
     # Custom Premium Routing Dialog (Safe Mode)
     dialog = tk.Toplevel(self)
@@ -3179,7 +3268,7 @@ class TraceabilityApp(tk.Tk):
       registered_by
     ]
     
-    threading.Thread(target=self.background_excel_save, args=(excel_data,), daemon=True).start()
+    self.background_excel_save(excel_data)
 
     self.lbl_status.config(text=f"Saved successfully: {sb_id}", fg=SUCCESS_COLOR)
     self.after(7000, lambda: self.lbl_status.config(text=""))
@@ -3243,30 +3332,33 @@ class TraceabilityApp(tk.Tk):
     for item in self.tree_records.get_children():
       self.tree_records.delete(item)
       
-    query = """SELECT r.sub_batch_id, r.pn_sf, r.part_sf, r.quantity, r.shift_sp, r.station, r.op_id, r.dt_sp, r.status, r.reprint_count, IFNULL(SUM(CASE WHEN q.status='Closed' AND q.action_type IN ('Rework', 'Sorting', 'Use As-Is') THEN 0 ELSE q.qty_defective END), 0)
+    base_query = """SELECT r.sub_batch_id, r.pn_sf, r.part_sf, r.quantity, r.shift_sp, r.station, r.op_id, r.dt_sp, r.status, r.reprint_count, IFNULL(SUM(CASE WHEN q.status='Closed' AND q.action_type IN ('Rework', 'Sorting', 'Use As-Is') THEN 0 ELSE q.qty_defective END), 0)
                FROM records r LEFT JOIN quality_defects q ON r.sub_batch_id = q.sub_batch_id WHERE 1=1"""
-    params = []
+    filters, params = [], []
     
     search = self.var_rec_search.get()
     if search:
-      query += " AND (r.sub_batch_id LIKE ? OR r.pn_sf LIKE ? OR r.part_sf LIKE ? OR r.op_id LIKE ?)"
+      filters.append("(r.sub_batch_id LIKE ? OR r.pn_sf LIKE ? OR r.part_sf LIKE ? OR r.op_id LIKE ?)")
       params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
       
     shift = self.cb_rec_shift.get()
     if shift != "All":
-      query += " AND r.shift_sp = ?"
+      filters.append("r.shift_sp = ?")
       params.append(shift)
       
     station = self.cb_rec_station.get()
     if station != "All":
-      query += " AND r.station = ?"
+      filters.append("r.station = ?")
       params.append(station)
       
-    query += " GROUP BY r.id ORDER BY r.id DESC"
+    if filters:
+      base_query += " AND " + " AND ".join(filters)
+      
+    base_query += " GROUP BY r.id ORDER BY r.id DESC"
     
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute(query, params)
+    c.execute(base_query, params)
     rows = c.fetchall()
     conn.close()
     
@@ -4494,16 +4586,22 @@ class TraceabilityApp(tk.Tk):
           oldest_dt_per_pn[pn] = dt_obj
       except: pass
       
-    for row in agg_rows:
-      pn, total_qty, box_count = row
-      oldest_age_hours = 0.0
-      if pn in oldest_dt_per_pn:
-        oldest_age_hours = (now - oldest_dt_per_pn[pn]).total_seconds() / 3600.0
-        
+    if not agg_rows:
       c.execute('''INSERT OR REPLACE INTO inventory_snapshots 
              (snapshot_date, pn_sf, boxes_in_rack, total_qty_in_rack, oldest_box_age_hours)
              VALUES (?, ?, ?, ?, ?)''', 
-             (date_str, pn, box_count, total_qty, oldest_age_hours))
+             (date_str, "NONE", 0, 0, 0.0))
+    else:
+      for row in agg_rows:
+        pn, total_qty, box_count = row
+        oldest_age_hours = 0.0
+        if pn in oldest_dt_per_pn:
+          oldest_age_hours = (now - oldest_dt_per_pn[pn]).total_seconds() / 3600.0
+          
+        c.execute('''INSERT OR REPLACE INTO inventory_snapshots 
+               (snapshot_date, pn_sf, boxes_in_rack, total_qty_in_rack, oldest_box_age_hours)
+               VALUES (?, ?, ?, ?, ?)''', 
+               (date_str, pn, box_count, total_qty, oldest_age_hours))
     conn.commit()
     conn.close()
     print(f"[{datetime.datetime.now()}] Automated Inventory Snapshot Taken for {date_str}.")
