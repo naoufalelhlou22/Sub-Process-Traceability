@@ -83,18 +83,25 @@ def generate_shift_pdf_report(target_date, shift_db_value):
     conn = get_db_connection()
     c = conn.cursor()
 
-    c.execute('''SELECT COUNT(*), SUM(quantity) 
+    c.execute('''SELECT SUM(quantity) 
                  FROM records 
                  WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ?''', (target_date, shift_db_value))
-    total_boxes, total_qty = c.fetchone()
-    total_boxes = total_boxes or 0
-    total_qty = total_qty or 0
+    total_qty = c.fetchone()[0] or 0
     
-    c.execute('''SELECT pn_sf, part_sf, SUM(quantity) 
-                 FROM records 
-                 WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ?
-                 GROUP BY pn_sf, part_sf ORDER BY SUM(quantity) DESC''', (target_date, shift_db_value))
+    c.execute('''SELECT r.pn_sf, r.part_sf, SUM(r.quantity), p.std_box_qty 
+                 FROM records r LEFT JOIN products p ON r.pn_sf = p.pn_sf
+                 WHERE CASE WHEN CAST(substr(r.dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(r.dt_sp, 1, 10), '-1 day') ELSE substr(r.dt_sp, 1, 10) END = ? AND r.shift_sp = ?
+                 GROUP BY r.pn_sf, r.part_sf ORDER BY SUM(r.quantity) DESC''', (target_date, shift_db_value))
     production_mix = c.fetchall()
+    
+    tb_full = 0
+    tb_extra = 0
+    for row in production_mix:
+        std = row[3]
+        if std and std > 0:
+            tb_full += (row[2] or 0) // std
+            tb_extra += (row[2] or 0) % std
+    total_boxes = f"{tb_full} Box(es)" + (f" + {tb_extra} pcs" if tb_extra > 0 else "")
     
     c.execute('''SELECT defect_type, COUNT(*), SUM(qty_defective)
                  FROM quality_defects
@@ -115,10 +122,10 @@ def generate_shift_pdf_report(target_date, shift_db_value):
                  GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC''', (target_date, shift_db_value))
     targets_actual = c.fetchall()
     
-    c.execute('''SELECT pn_sf, SUM(quantity), COUNT(id)
-                 FROM records
-                 WHERE status="In Rack"
-                 GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 15''')
+    c.execute('''SELECT r.pn_sf, SUM(r.quantity), p.std_box_qty
+                 FROM records r LEFT JOIN products p ON r.pn_sf = p.pn_sf
+                 WHERE r.status="In Rack"
+                 GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC LIMIT 15''')
     inventory_wip = c.fetchall()
     
     c.execute('''SELECT rm1_pn, rm1_name, COUNT(DISTINCT batch1)
@@ -137,9 +144,9 @@ def generate_shift_pdf_report(target_date, shift_db_value):
     
     conn.close()
     
-    # if total_boxes == 0 and len(defects) == 0 and len(downtime_summary) == 0:
-    #     print(f"No data for {target_date} {shift_label}. Skipping PDF generation.")
-    #     return None
+    if total_boxes == 0 and len(defects) == 0 and len(downtime_summary) == 0:
+        print(f"No data for {target_date} {shift_label}. Skipping PDF generation.")
+        return None
         
     start_dt_str = f"{target_date} {shift_label} Start"
     end_dt_str = f"{target_date} {shift_label} End"
@@ -153,18 +160,25 @@ def generate_daily_pdf_report(start_dt, end_dt):
     conn = get_db_connection()
     c = conn.cursor()
 
-    c.execute('''SELECT COUNT(*), SUM(quantity) 
+    c.execute('''SELECT SUM(quantity) 
                  FROM records 
                  WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ?''', (target_date,))
-    total_boxes, total_qty = c.fetchone()
-    total_boxes = total_boxes or 0
-    total_qty = total_qty or 0
+    total_qty = c.fetchone()[0] or 0
     
-    c.execute('''SELECT pn_sf, part_sf, SUM(quantity) 
-                 FROM records 
-                 WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ?
-                 GROUP BY pn_sf, part_sf ORDER BY SUM(quantity) DESC''', (target_date,))
+    c.execute('''SELECT r.pn_sf, r.part_sf, SUM(r.quantity), p.std_box_qty 
+                 FROM records r LEFT JOIN products p ON r.pn_sf = p.pn_sf
+                 WHERE CASE WHEN CAST(substr(r.dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(r.dt_sp, 1, 10), '-1 day') ELSE substr(r.dt_sp, 1, 10) END = ?
+                 GROUP BY r.pn_sf, r.part_sf ORDER BY SUM(r.quantity) DESC''', (target_date,))
     production_mix = c.fetchall()
+    
+    tb_full = 0
+    tb_extra = 0
+    for row in production_mix:
+        std = row[3]
+        if std and std > 0:
+            tb_full += (row[2] or 0) // std
+            tb_extra += (row[2] or 0) % std
+    total_boxes = f"{tb_full} Box(es)" + (f" + {tb_extra} pcs" if tb_extra > 0 else "")
     
     c.execute('''SELECT defect_type, COUNT(*), SUM(qty_defective)
                  FROM quality_defects
@@ -185,10 +199,10 @@ def generate_daily_pdf_report(start_dt, end_dt):
                  GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC''', (target_date,))
     targets_actual = c.fetchall()
     
-    c.execute('''SELECT pn_sf, SUM(quantity), COUNT(id)
-                 FROM records
-                 WHERE status="In Rack"
-                 GROUP BY pn_sf ORDER BY SUM(quantity) DESC LIMIT 15''')
+    c.execute('''SELECT r.pn_sf, SUM(r.quantity), p.std_box_qty
+                 FROM records r LEFT JOIN products p ON r.pn_sf = p.pn_sf
+                 WHERE r.status="In Rack"
+                 GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC LIMIT 15''')
     inventory_wip = c.fetchall()
     
     c.execute('''SELECT rm1_pn, rm1_name, COUNT(DISTINCT batch1)
@@ -210,9 +224,9 @@ def generate_daily_pdf_report(start_dt, end_dt):
     start_dt_str = start_dt.strftime("%Y-%m-%d %H:%M")
     end_dt_str = end_dt.strftime("%Y-%m-%d %H:%M")
     
-    # if total_boxes == 0 and len(defects) == 0 and len(downtime_summary) == 0:
-    #     print(f"No data for {target_date}. Skipping daily PDF generation.")
-    #     return None
+    if total_boxes == 0 and len(defects) == 0 and len(downtime_summary) == 0:
+        print(f"No data for {target_date}. Skipping daily PDF generation.")
+        return None
         
     return _build_pdf(target_date, "Daily", start_dt_str, end_dt_str, total_boxes, total_qty, production_mix, defects, operators, targets_actual, inventory_wip, rm_usage, downtime_summary)
 
@@ -344,10 +358,16 @@ def _build_pdf(target_date, report_type_label, start_dt_str, end_dt_str, total_b
                 print_table_header(pdf, cols)
                 pdf.set_font("helvetica", "", 10)
             pdf.set_fill_color(245, 245, 245) if i % 2 == 0 else pdf.set_fill_color(255, 255, 255)
-            pn, qty, count = row
+            pn, qty, std = row
+            if std and std > 0:
+                fb = (qty or 0) // std
+                ex = (qty or 0) % std
+                count_str = f"{fb} B + {ex} p" if ex > 0 else f"{fb} B"
+            else:
+                count_str = "N/A"
             pdf.cell(90, 8, str(pn)[:35], border=1, align='C', fill=True)
             pdf.cell(50, 8, str(qty), border=1, align='C', fill=True)
-            pdf.cell(50, 8, str(count), border=1, align='C', fill=True, new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(50, 8, str(count_str), border=1, align='C', fill=True, new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.set_text_color(50, 50, 50)
         pdf.set_font("helvetica", "I", 10)

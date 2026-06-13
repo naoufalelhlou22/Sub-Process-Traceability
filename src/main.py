@@ -12,44 +12,14 @@ import sys
 import threading
 import queue
 
-_excel_queue = queue.Queue()
+from config import *
+from database import logger, get_db_connection, db_connection, hash_password, verify_password, migrate_passwords, SF_DATA, load_sf_data, init_db
+from excel_services import queue_excel_task, rebuild_excel_from_db, save_to_excel
+from printing import generate_zpl, execute_zpl_print, print_html_slip, generate_pick_ticket_zpl, execute_ticket_print, add_to_startup
 
-def _excel_worker():
-    while True:
-        func, args, kwargs = _excel_queue.get()
-        try:
-            func(*args, **kwargs)
-        except Exception as e:
-            print(f"Excel worker error: {e}")
-        finally:
-            _excel_queue.task_done()
-
-_excel_thread = threading.Thread(target=_excel_worker, daemon=True)
-_excel_thread.start()
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-import report_generator
-
-def resource_path(relative_path):
-  """ Get absolute path to resource, works for dev and for PyInstaller """
-  try:
-    base_path = sys._MEIPASS
-  except Exception:
-    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-  return os.path.join(base_path, relative_path)
-
-def persistent_path(relative_path):
-  """ Get absolute path to persistent data, relative to executable """
-  if hasattr(sys, '_MEIPASS'):
-    base_path = os.path.dirname(sys.executable)
-  else:
-    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-  return os.path.join(base_path, relative_path)
-
-def center_window(win, width, height):
-  win.update_idletasks()
-  x = (win.winfo_screenwidth() // 2) - (width // 2)
-  y = (win.winfo_screenheight() // 2) - (height // 2)
-  win.geometry(f"{width}x{height}+{x}+{y}")
+from openpyxl.utils import get_column_letter
 
 try:
   import win32print
@@ -69,735 +39,6 @@ try:
 except ImportError:
   MATPLOTLIB_AVAILABLE = False
 
-DATA_DIR = persistent_path("data")
-os.makedirs(DATA_DIR, exist_ok=True)
-
-# Migration logic for old data files
-_base = os.path.abspath(os.path.join(DATA_DIR, ".."))
-for _f in ["traceability_config.json", "sf_data.json", "traceability.db", "production_data.xlsx"]:
-  _old = os.path.join(_base, _f)
-  _new = os.path.join(DATA_DIR, _f)
-  if os.path.exists(_old) and not os.path.exists(_new):
-    try:
-      import shutil
-      shutil.move(_old, _new)
-    except Exception:
-      pass
-
-CONFIG_FILE = os.path.join(DATA_DIR, "traceability_config.json")
-APP_VERSION = "1.1.0"
-# Premium Industrial HMI Theme
-
-BG_COLOR = "#121212"    # Main Background
-SURFACE_COLOR = "#1E1E1E" # Panels & Cards
-
-ACCENT_COLOR = "#00B4D8"  # Primary Action
-SUCCESS_COLOR = "#2DC653" # Running / Completed
-WARNING_COLOR = "#F59E0B" # Warning
-ERROR_COLOR = "#DC2626"  # Error / Stop
-
-BORDER_COLOR = "#334155"  # Borders
-
-TEXT_COLOR = "#F8FAFC"   # Main Text
-TEXT_MUTED = "#94A3B8"   # Secondary Text
-
-# Status Colors
-STATUS_RUNNING = "#22C55E"
-STATUS_IDLE = "#64748B"
-STATUS_WARNING = "#F59E0B"
-STATUS_STOPPED = "#EF4444"
-
-# Modern HMI Fonts
-HMI_FONT_XL = ("Segoe UI", 20, "bold")
-HMI_FONT_L = ("Segoe UI", 16, "bold")
-HMI_FONT_M = ("Segoe UI", 12, "bold")
-HMI_FONT_S = ("Segoe UI", 10)
-HMI_FONT_XS = ("Segoe UI", 9)
-
-# Default Hardcoded Data (Fallback)
-SF_DATA_DEFAULT = {
-  "MOCK-A01-10001-X-SUB": ("Alpha Subsystem Right", [("MOCK-A01-10001-Y-PRT", "Alpha Core Right"), ("MOCK-A01-10002-Z-PRT", "Alpha Buffer Right")]),
-  "MOCK-A01-10003-X-SUB": ("Alpha Subsystem Aux Right", [("MOCK-A01-10003-Y-PRT", "Alpha Core (Auxiliary) Right"), ("MOCK-A01-10002-Z-PRT", "Alpha Buffer Right")]),
-  "MOCK-A01-10004-X-SUB": ("Alpha Subsystem Left", [("MOCK-A01-10004-Y-PRT", "Alpha Core Left"), ("MOCK-A01-10005-Z-PRT", "Alpha Buffer Left")]),
-  "MOCK-A01-10006-X-SUB": ("Alpha Subsystem Aux Left", [("MOCK-A01-10006-Y-PRT", "Alpha Core (Auxiliary) Left"), ("MOCK-A01-10005-Z-PRT", "Alpha Buffer Left")]),
-  "MOCK-B02-20001-X-SUB": ("Beta Panel Right Sub", [("MOCK-B02-20001-Y-PRT", "Beta Panel Right"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
-  "MOCK-B02-20003-X-SUB": ("Beta Panel Left Sub", [("MOCK-B02-20003-Y-PRT", "Beta Panel Left"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
-  "MOCK-B02-20004-X-SUB": ("Beta Panel Right Sub V2", [("MOCK-B02-20004-Y-PRT", "Beta Panel (Upgraded) Right"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
-  "MOCK-B02-20005-X-SUB": ("Beta Panel Left Sub V2", [("MOCK-B02-20005-Y-PRT", "Beta Panel (Upgraded) Left"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")]),
-  "MOCK-C03-30001-X-SUB": ("Gamma Switch Right Sub (Short)", [("MOCK-C03-30001-Y-PRT", "Gamma Switch Right"), ("MOCK-C03-30002-Z-PRT", "Gamma Coil Right"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
-  "MOCK-C03-30004-X-SUB": ("Gamma Switch Left Sub (Short)", [("MOCK-C03-30004-Y-PRT", "Gamma Switch Left"), ("MOCK-C03-30005-Z-PRT", "Gamma Coil Left"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
-  "MOCK-C03-30006-X-SUB": ("Gamma Switch Right Sub (Long)", [("MOCK-C03-30006-Y-PRT", "Gamma Switch Long Right"), ("MOCK-C03-30002-Z-PRT", "Gamma Coil Right"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
-  "MOCK-C03-30007-X-SUB": ("Gamma Switch Left Sub (Long)", [("MOCK-C03-30007-Y-PRT", "Gamma Switch Long Left"), ("MOCK-C03-30005-Z-PRT", "Gamma Coil Left"), ("MOCK-C03-30003-W-PRT", "Gamma Pin")]),
-  "MOCK-D04-40001-X-SUB": ("Delta Processor Node Right", [("MOCK-D04-40001-Y-PRT", "Delta Primary Node"), ("MOCK-D04-40002-Z-PRT", "Delta Interface Right"), ("MOCK-D04-40003-W-PRT", "Delta Rotor")]),
-  "MOCK-D04-40004-X-SUB": ("Delta Processor Node Left", [("MOCK-D04-40001-Y-PRT", "Delta Primary Node"), ("MOCK-D04-40005-Z-PRT", "Delta Interface Left"), ("MOCK-D04-40003-W-PRT", "Delta Rotor")]),
-  "MOCK-D04-40006-X-SUB": ("Delta Processor Array Right", [("MOCK-D04-40001-Y-PRT", "Delta Primary Node"), ("MOCK-D04-40007-Y-PRT", "Delta Secondary Node"), ("MOCK-D04-40008-Z-PRT", "Delta Interface Array Right"), ("MOCK-D04-40003-W-PRT", "Delta Rotor")]),
-  "MOCK-E05-50001-X-SUB": ("Epsilon Housing Sub Right", [("MOCK-E05-50001-Y-PRT", "Epsilon Housing Right"), ("MOCK-E05-50002-Z-PRT", "Epsilon Axis")]),
-  "MOCK-E05-50003-X-SUB": ("Epsilon Housing Sub Left", [("MOCK-E05-50003-Y-PRT", "Epsilon Housing Left"), ("MOCK-E05-50002-Z-PRT", "Epsilon Axis")]),
-  "MOCK-F06-60001-X-SUB": ("Zeta Mount Assembly RH", [("MOCK-F06-60001-Y-PRT", "Zeta Mount RH"), ("MOCK-F06-60002-Z-PRT", "Zeta Fastener")]),
-  "MOCK-F06-60003-X-SUB": ("Zeta Mount Assembly LH", [("MOCK-F06-60003-Y-PRT", "Zeta Mount LH"), ("MOCK-F06-60002-Z-PRT", "Zeta Fastener")]),
-  "MOCK-G07-70001-X-SUB": ("Omega Framework Sub Left", [("MOCK-G07-70001-Y-PRT", "Omega Anchor Left"), ("MOCK-G07-70002-Y-PRT", "Omega Frame Left"), ("MOCK-A01-10005-Z-PRT", "Alpha Buffer Left"), ("MOCK-B02-20002-Z-PRT", "Beta Sealant")])
-}
-
-SF_DATA_FILE = os.path.join(DATA_DIR, "sf_data.json")
-SF_DATA = {}
-
-def load_sf_data():
-  global SF_DATA
-  SF_DATA = {}
-  try:
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT pn_sf, name_sf, rms_json FROM products")
-    rows = c.fetchall()
-    for r in rows:
-      pn = r[0]
-      name = r[1]
-      try:
-        rms = json.loads(r[2])
-      except:
-        rms = []
-      SF_DATA[pn] = (name, rms)
-    conn.close()
-    
-    if not SF_DATA:
-      SF_DATA = dict(SF_DATA_DEFAULT)
-      conn = get_db_connection()
-      c = conn.cursor()
-      for pn, val in SF_DATA.items():
-        c.execute("INSERT INTO products (pn_sf, name_sf, rms_json) VALUES (?, ?, ?)", (pn, val[0], json.dumps(val[1])))
-      conn.commit()
-      conn.close()
-      
-  except Exception as e:
-    print("Error loading SF_DATA from DB:", e)
-    SF_DATA = dict(SF_DATA_DEFAULT)
-
-
-DB_FILE = os.path.join(DATA_DIR, "traceability.db")
-
-def get_db_connection():
-  conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-  conn.execute('PRAGMA journal_mode=WAL')
-  return conn
-
-import hashlib
-import binascii
-
-def hash_password(password: str, salt: bytes = None) -> str:
-  if salt is None:
-    salt = os.urandom(32)
-  key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 310_000)
-  return binascii.hexlify(salt).decode() + ":" + binascii.hexlify(key).decode()
-
-def verify_password(password: str, stored: str) -> bool:
-  try:
-    if ":" not in stored:
-      return False
-    salt_hex, key_hex = stored.split(":")
-    salt = binascii.unhexlify(salt_hex)
-    
-    # 1. Normal check (new schema)
-    expected = hash_password(password, salt)
-    if expected == stored:
-      return True
-      
-    # 2. Migration fallback check (double-hashed from old static salt schema)
-    old_salt = b"subproc_trace_salt_2026"
-    old_hash_obj = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), old_salt, 100000)
-    old_hash_str = binascii.hexlify(old_hash_obj).decode("utf-8")
-    
-    expected_old = hash_password(old_hash_str, salt)
-    if expected_old == stored:
-      return True
-      
-    return False
-  except Exception:
-    return False
-
-def migrate_passwords():
-  conn = get_db_connection()
-  c = conn.cursor()
-  c.execute("SELECT id, password FROM auth")
-  rows = c.fetchall()
-  for row in rows:
-    uid, pwd = row
-    if pwd and ":" not in pwd:
-      hashed = hash_password(pwd)
-      c.execute("UPDATE auth SET password = ? WHERE id = ?", (hashed, uid))
-  conn.commit()
-  conn.close()
-EXCEL_FILE = os.path.join(DATA_DIR, "production_data.xlsx")
-
-def init_db():
-  try:
-    from quality_app import init_quality_db
-    init_quality_db()
-  except ImportError:
-    pass
-    
-  conn = get_db_connection()
-  c = conn.cursor()
-  
-  c.execute('''
-    CREATE TABLE IF NOT EXISTS products (
-      pn_sf TEXT PRIMARY KEY,
-      name_sf TEXT,
-      rms_json TEXT
-    )
-  ''')
-  
-  c.execute('''
-    CREATE TABLE IF NOT EXISTS product_audit_trail (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      action TEXT,
-      pn_sf TEXT,
-      details TEXT,
-      user_id TEXT,
-      shift TEXT,
-      timestamp TEXT
-    )
-  ''')
-  
-  c.execute('''
-    CREATE TABLE IF NOT EXISTS system_access_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_type TEXT,
-      user_id TEXT,
-      shift TEXT,
-      timestamp TEXT
-    )
-  ''')
-  
-  c.execute('''
-    CREATE TABLE IF NOT EXISTS auth (
-      id TEXT PRIMARY KEY,
-      password TEXT,
-      role TEXT
-    )
-  ''')
-
-  c.execute('''
-    CREATE TABLE IF NOT EXISTS schema_version (
-      version INTEGER PRIMARY KEY,
-      applied_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  ''')
-  c.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (1)")
-  
-  try:
-    import os
-    default_users = [
-      ('mg90', os.environ.get('MANAGER_PASS', 'oi90'), 'Manager'),
-      ('sp99', os.environ.get('SUPERVISOR_PASS', 'sp99'), 'Supervisor'),
-      ('sl', os.environ.get('SHIFT_LEADER_PASS', 'sl98'), 'Shift Leader'),
-      ('op1', os.environ.get('OPERATOR_PASS', 'op1'), 'Operator')
-    ]
-    for uid, plain_pwd, role in default_users:
-      c.execute("INSERT OR IGNORE INTO auth (id, password, role) VALUES (?, ?, ?)", (uid, hash_password(plain_pwd), role))
-    
-    # Also inserting the 's' supervisor from original if not overridden
-    c.execute("INSERT OR IGNORE INTO auth (id, password, role) VALUES (?, ?, ?)", ('s', hash_password(' '), 'Supervisor'))
-    
-    conn.commit()
-  except Exception as e:
-    print("Auth seed error:", e)
-  
-  migrate_passwords()
-    
-  c.execute("SELECT COUNT(*) FROM products")
-  count = c.fetchone()[0]
-  if count == 0 and os.path.exists(SF_DATA_FILE):
-    try:
-      with open(SF_DATA_FILE, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
-      for pn, val in json_data.items():
-        c.execute("INSERT INTO products (pn_sf, name_sf, rms_json) VALUES (?, ?, ?)", (pn, val[0], json.dumps(val[1])))
-      conn.commit()
-    except Exception:
-      pass
-
-  c.execute('''
-    CREATE TABLE IF NOT EXISTS records (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sub_batch_id TEXT NOT NULL,
-      pn_sf TEXT,
-      part_sf TEXT,
-      rm1_pn TEXT,
-      rm1_name TEXT,
-      rm2_pn TEXT,
-      rm2_name TEXT,
-      rm3_pn TEXT,
-      rm3_name TEXT,
-      rm4_pn TEXT,
-      rm4_name TEXT,
-      batch1 TEXT,
-      batch2 TEXT,
-      batch3 TEXT,
-      quantity INTEGER,
-      shift_sp TEXT,
-      op_id TEXT,
-      station TEXT,
-      dt_sp TEXT,
-      dt_line TEXT,
-      shift_line TEXT,
-      remarks TEXT,
-      status TEXT DEFAULT 'In Rack',
-      created_at TEXT NOT NULL
-    )
-  ''')
-  
-  try:
-    c.execute("ALTER TABLE records ADD COLUMN registered_by TEXT DEFAULT ''")
-  except sqlite3.OperationalError:
-    pass
-    
-  try:
-    c.execute("ALTER TABLE records ADD COLUMN reprint_count INTEGER DEFAULT 0")
-  except sqlite3.OperationalError:
-    pass
-    
-  try:
-    c.execute("ALTER TABLE records ADD COLUMN last_reprinted_at TEXT")
-  except sqlite3.OperationalError:
-    pass
-    
-  try:
-    c.execute("ALTER TABLE records ADD COLUMN last_reprinted_by TEXT")
-  except sqlite3.OperationalError:
-    pass
-    
-  c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_sub_batch_id ON records(sub_batch_id)")
-  
-  c.execute('''CREATE TABLE IF NOT EXISTS shift_targets (
-           id INTEGER PRIMARY KEY AUTOINCREMENT,
-           product_pn TEXT NOT NULL,
-           shift TEXT NOT NULL,
-           station TEXT,
-           target_qty INTEGER NOT NULL,
-           effective_date TEXT NOT NULL
-         )''')
-
-  c.execute('''CREATE TABLE IF NOT EXISTS part_thresholds (
-           pn_sf TEXT PRIMARY KEY,
-           min_qty INTEGER NOT NULL DEFAULT 0
-         )''')
-
-  c.execute('''CREATE TABLE IF NOT EXISTS inventory_snapshots (
-           snapshot_date TEXT NOT NULL,
-           pn_sf TEXT NOT NULL,
-           boxes_in_rack INTEGER,
-           total_qty_in_rack INTEGER,
-           oldest_box_age_hours REAL,
-           PRIMARY KEY (snapshot_date, pn_sf)
-         )''')
-    
-  c.execute('''CREATE TABLE IF NOT EXISTS downtime_logs (
-           id INTEGER PRIMARY KEY AUTOINCREMENT,
-           sub_batch_id TEXT,
-           station TEXT,
-           shift TEXT,
-           op_id TEXT,
-           duration_min REAL,
-           reason TEXT,
-           created_at TEXT
-         )''')
-         
-  # Migration: add op_id to downtime_logs if it doesn't exist
-  try:
-      c.execute("ALTER TABLE downtime_logs ADD COLUMN op_id TEXT")
-  except sqlite3.OperationalError:
-      pass
-
-  conn.commit()
-  conn.close()
-  
-  load_sf_data()
-
-
-def rebuild_excel_from_db():
-  if os.path.exists(EXCEL_FILE):
-    try:
-      os.remove(EXCEL_FILE)
-    except Exception:
-      pass
-      
-  wb = Workbook()
-  ws = wb.active
-  ws.title = "Sub-process fill by TL"
-  
-  headers = [
-    "SB ID", "FULL PN Semi fini", "PART NAME (SF)", 
-    "RM PN", "RM Name",
-    "Batch No. 1", "Batch No. 2", "Batch No. 3", "Quantity",
-    "Work in Sub-Process by Shift", "Op ID", "Station",
-    "Sub-Process Work Date/Time", "Production Line Entry Date/Time",
-    "Work in PROD line by Shift", "Remarks", "Registered by ID"
-  ]
-  ws.append(headers)
-  ws.freeze_panes = "A2"
-  
-  header_font = Font(name='Calibri', size=10, bold=True, color="000000")
-  header_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
-  header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-  thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-
-  for col_idx in range(1, 18):
-    cell = ws.cell(row=1, column=col_idx)
-    cell.font = header_font
-    cell.fill = header_fill
-    cell.alignment = header_align
-    cell.border = thin_border
-    
-  ws.row_dimensions[1].height = 34
-  widths = [20, 22, 25, 22, 25, 12, 12, 12, 10, 15, 10, 10, 20, 20, 15, 25, 15]
-  from openpyxl.utils import get_column_letter
-  for i, w in enumerate(widths, start=1):
-    ws.column_dimensions[get_column_letter(i)].width = w
-
-  conn = get_db_connection()
-  conn.row_factory = sqlite3.Row
-  c = conn.cursor()
-  c.execute("SELECT * FROM records ORDER BY id ASC")
-  rows = c.fetchall()
-  conn.close()
-  
-  for row in rows:
-    data = [
-      row["sub_batch_id"], row["pn_sf"], row["part_sf"],
-      row["rm1_pn"], row["rm1_name"], row["rm2_pn"], row["rm2_name"],
-      row["rm3_pn"], row["rm3_name"], row["rm4_pn"], row["rm4_name"],
-      row["batch1"], row["batch2"], row["batch3"], row["quantity"],
-      row["shift_sp"], row["op_id"], row["station"], row["dt_sp"], row["dt_line"],
-      row["shift_line"], row["remarks"], row["registered_by"]
-    ]
-    _write_record_to_ws(ws, data)
-    
-  wb.save(EXCEL_FILE)
-
-def save_to_excel(data):
-  if not os.path.exists(EXCEL_FILE):
-    rebuild_excel_from_db()
-    return
-
-  try:
-    wb = load_workbook(EXCEL_FILE)
-    if "Sub-process fill by TL" in wb.sheetnames:
-      ws = wb["Sub-process fill by TL"]
-    else:
-      rebuild_excel_from_db()
-      return
-      
-    _write_record_to_ws(ws, data)
-    wb.save(EXCEL_FILE)
-  except Exception as e:
-    print(f"Error loading Excel file: {e}")
-    return
-
-def _write_record_to_ws(ws, data):
-  sb_id = data[0] if data[0] else "-"
-  sf_pn = data[1] if data[1] else "-"
-  part_sf = data[2] if data[2] else "-"
-  rms = []
-  for i in range(4):
-    rm_pn = data[3 + i*2]
-    rm_name = data[4 + i*2]
-    if rm_pn:
-      rms.append((rm_pn if rm_pn else "-", rm_name if rm_name else "-"))
-      
-  if not rms:
-    rms = [("-", "-")]
-    
-  num_rms = len(rms)
-  rest_data = ["-" if (x == "" or x is None) else x for x in data[11:]]
-  
-  start_row = ws.max_row + 1
-  end_row = start_row + num_rms - 1
-  
-  for i in range(num_rms):
-    row_data = []
-    if i == 0:
-      row_data.extend([sb_id, sf_pn, part_sf])
-      row_data.extend([rms[i][0], rms[i][1]])
-      row_data.extend(rest_data)
-    else:
-      row_data.extend([None, None, None])
-      row_data.extend([rms[i][0], rms[i][1]])
-      row_data.extend([None] * len(rest_data))
-    ws.append(row_data)
-    
-  if num_rms > 1:
-    ws.merge_cells(start_row=start_row, start_column=1, end_row=end_row, end_column=1)
-    ws.merge_cells(start_row=start_row, start_column=2, end_row=end_row, end_column=2)
-    ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
-    for col in range(6, 18):
-      ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
-  
-  sf_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-  rm_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-  rest_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-  row_font = Font(name='Calibri', size=10, color="000000")
-  align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-  thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-  
-  for r in range(start_row, end_row + 1):
-    for c in range(1, 18):
-      cell = ws.cell(row=r, column=c)
-      cell.font = row_font
-      cell.alignment = align
-      cell.border = thin_border
-      if c in (1, 2, 3):
-        cell.fill = sf_fill
-      elif c in (4, 5):
-        cell.fill = rm_fill
-      else:
-        cell.fill = rest_fill
-
-
-def generate_zpl(record_data):
-  def format_val(val, default="-"):
-    return str(val) if val else default
-
-  zpl = []
-  zpl.append("^XA")
-  zpl.append("^PW520")
-  zpl.append("^LH0,0")
-  zpl.append("^CI28")
-  
-  def draw_layout(offset_y):
-    zpl.append(f"^FO30,{20+offset_y}^A0N,24,24^FB460,1,0,C^FDSUB-PROCESS RECORD\\&^FS")
-    zpl.append(f"^FO30,{55+offset_y}^GB460,3,3^FS")
-    
-    zpl.append(f"^FO30,{70+offset_y}^GB460,40,40^FS")
-    zpl.append(f"^FO30,{80+offset_y}^A0N,24,24^FR^FB460,1,0,C^FD{format_val(record_data.get('sub_batch_id'))}\\&^FS")
-    
-    sb_id_val = format_val(record_data.get('sub_batch_id'))
-    zpl.append(f"^BY2^FO50,{120+offset_y}^BCN,50,N,N,N,A^FD{sb_id_val}^FS")
-    
-    y = 185 + offset_y
-    def add_row(label, value, font_size=18, y_inc=20):
-      nonlocal y
-      zpl.append(f"^FO30,{y}^A0N,{font_size},{font_size}^FD{label}^FS")
-      zpl.append(f"^FO30,{y}^A0N,{font_size},{font_size}^FB460,1,0,R^FD{value}\\&^FS")
-      y += y_inc
-
-    add_row("PN Semi fini", format_val(record_data.get('pn_sf')))
-    add_row("Part Name (SF)", format_val(record_data.get('part_sf')))
-        
-    y += 3
-    zpl.append(f"^FO30,{y}^GB460,1,1^FS")
-    y += 8
-    
-    add_row("Batch No. 1", format_val(record_data.get('batch1')))
-    add_row("Batch No. 2", format_val(record_data.get('batch2')))
-    add_row("Batch No. 3", format_val(record_data.get('batch3')))
-    add_row("Quantity", f"{format_val(record_data.get('quantity'))} pcs", font_size=20, y_inc=25)
-    
-    zpl.append(f"^FO30,{y}^GB460,1,1^FS")
-    y += 8
-    
-    add_row("Shift SP", format_val(record_data.get('shift_sp')))
-    add_row("Op ID", format_val(record_data.get('op_id')))
-    add_row("Station", format_val(record_data.get('station')))
-    dt_sp = format_val(record_data.get('dt_sp'))[:16] if record_data.get('dt_sp') else '-'
-    add_row("SP Date/Time", dt_sp)
-    dt_line = format_val(record_data.get('dt_line'))[:16] if record_data.get('dt_line') else '-'
-    add_row("Line Entry", dt_line)
-    
-    printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    add_row("Printed At", printed)
-    
-    y += 3
-    zpl.append(f"^FO30,{y}^GB460,2,2^FS")
-    y += 8
-    
-    reprints = int(record_data.get('reprint_count') or 0)
-    if reprints > 0:
-      last_by = record_data.get('last_reprinted_by', 'Unknown')
-      last_at = record_data.get('last_reprinted_at', '')[:16] if record_data.get('last_reprinted_at') else ''
-      audit_text = f"** REPRINT #{reprints} by {last_by} at {last_at} **"
-      zpl.append(f"^FO30,{y}^A0N,14,14^FB460,1,0,C^FD{audit_text}\\&^FS")
-    else:
-      zpl.append(f"^FO30,{y}^A0N,14,14^FB460,1,0,C^FD-- Original Print --\\&^FS")
-    y += 18
-    
-  draw_layout(0)
-  
-  zpl.append(f"^FO30,728^A0N,20,20^FB460,1,0,C^FD- - - - - - - - - - - -\\&^FS")
-  
-  draw_layout(982)
-
-  zpl.append("^PQ1")
-  zpl.append("^XZ")
-  return "\n".join(zpl).encode("utf-8")
-
-def execute_zpl_print(zpl_string, record_data, silent=False):
-  config = {}
-  if os.path.exists(CONFIG_FILE):
-    try:
-      with open(CONFIG_FILE, "r") as f:
-        config = json.load(f)
-    except: pass
-      
-  printer_name = config.get("zebra_printer", "")
-  
-  try:
-    qr_dir = persistent_path("qr")
-    os.makedirs(qr_dir, exist_ok=True)
-    sb_id_safe = str(record_data.get('sub_batch_id', 'unknown')).replace(":", "").replace("-", "")
-    file_path = os.path.join(qr_dir, f"{sb_id_safe}.zpl")
-    with open(file_path, "wb") as f:
-      f.write(zpl_string)
-  except Exception as e:
-    print("Could not save ZPL file:", e)
-    
-  if not printer_name:
-    if not silent:
-      messagebox.showwarning("Setup Required", "ZPL saved to 'qr' folder. Please configure Zebra Printer in Settings to physically print.")
-    return
-    
-  if not WIN32_PRINT_AVAILABLE:
-    if not silent:
-      messagebox.showerror("Error", "pywin32 is not installed. ZPL saved to 'qr' folder, but cannot print. Please run 'pip install pywin32'.")
-    return
-  
-  try:
-    hPrinter = win32print.OpenPrinter(printer_name)
-    try:
-      job = win32print.StartDocPrinter(hPrinter, 1, ("Sub-Process Label", None, "RAW"))
-      win32print.StartPagePrinter(hPrinter)
-      win32print.WritePrinter(hPrinter, zpl_string)
-      win32print.EndPagePrinter(hPrinter)
-      win32print.EndDocPrinter(hPrinter)
-      if not silent:
-        messagebox.showinfo("Success", f"Label sent to printer '{printer_name}' successfully!")
-    finally:
-      win32print.ClosePrinter(hPrinter)
-  except Exception as e:
-    if not silent:
-      messagebox.showerror("Printer Error", f"Failed to send to printer '{printer_name}':\n{e}")
-
-def print_html_slip(record_data, silent=False):
-  zpl_string = generate_zpl(record_data)
-  execute_zpl_print(zpl_string, record_data, silent)
-
-def generate_pick_ticket_zpl(pn, target_qty, accumulated, picked):
-  zpl = []
-  zpl.append("^XA")
-  zpl.append("^PW480")
-  zpl.append("^LH20,0")
-  zpl.append("^CI28")
-  
-  zpl.append("^FO0,30^A0N,30,30^FB440,1,0,C^FDFIFO PICK TICKET\\&^FS")
-  zpl.append("^FO0,70^GB440,3,3^FS")
-  
-  zpl.append(f"^FO5,85^A0N,22,22^FDPart: {pn}^FS")
-  zpl.append(f"^FO5,115^A0N,22,22^FDTarget: {target_qty} | Actual: {accumulated}^FS")
-  
-  y = 150
-  table_start_y = y
-  
-  zpl.append(f"^FO0,{y}^GB440,2,2^FS")
-  y += 5
-  
-  zpl.append(f"^FO5,{y}^A0N,20,20^FDSub-Batch ID^FS")
-  zpl.append(f"^FO215,{y}^A0N,20,20^FDQty^FS")
-  zpl.append(f"^FO280,{y}^A0N,20,20^FDStored Date^FS")
-  y += 25
-  
-  zpl.append(f"^FO0,{y}^GB440,2,2^FS")
-  
-  for sb, q, dt in picked:
-    y += 5
-    zpl.append(f"^FO5,{y}^A0N,18,18^FD{sb}^FS")
-    zpl.append(f"^FO215,{y}^A0N,18,18^FD{q}^FS")
-    dt_short = dt[:16] if dt else ""
-    zpl.append(f"^FO280,{y}^A0N,18,18^FD{dt_short}^FS")
-    y += 25
-    zpl.append(f"^FO0,{y}^GB440,1,1^FS")
-    
-  zpl.append(f"^FO0,{table_start_y}^GB2,{y - table_start_y},2^FS")
-  zpl.append(f"^FO210,{table_start_y}^GB2,{y - table_start_y},2^FS")
-  zpl.append(f"^FO270,{table_start_y}^GB2,{y - table_start_y},2^FS")
-  zpl.append(f"^FO440,{table_start_y}^GB2,{y - table_start_y},2^FS")
-  
-  y += 15
-  import datetime
-  printed = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-  zpl.append(f"^FO5,{y}^A0N,18,18^FDPrinted: {printed}^FS")
-  
-  zpl.append("^PQ1")
-  zpl.append("^XZ")
-  return "\n".join(zpl).encode("utf-8")
-
-def execute_ticket_print(zpl_string, pn, silent=False):
-  config = {}
-  if os.path.exists(CONFIG_FILE):
-    try:
-      with open(CONFIG_FILE, "r") as f:
-        config = json.load(f)
-    except: pass
-
-  printer_name = config.get("zebra_printer", "")
-
-  try:
-    tickets_dir = persistent_path("tickets")
-    os.makedirs(tickets_dir, exist_ok=True)
-    safe_pn = str(pn).replace(":", "").replace("-", "")
-    import datetime
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_path = os.path.join(tickets_dir, f"TICKET_{safe_pn}_{timestamp}.zpl")
-    with open(file_path, "wb") as f:
-      f.write(zpl_string)
-  except Exception as e:
-    print("Could not save Pick Ticket ZPL file:", e)
-
-  if not printer_name:
-    if not silent:
-      messagebox.showwarning("Setup Required", "Ticket saved to 'tickets' folder.\\nPlease configure Zebra Printer in Settings to physically print.")
-    return
-
-  if not WIN32_PRINT_AVAILABLE:
-    if not silent: messagebox.showerror("Error", "win32print module not found. Printing disabled.")
-    return
-
-  try:
-    hPrinter = win32print.OpenPrinter(printer_name)
-    try:
-      hJob = win32print.StartDocPrinter(hPrinter, 1, ("Pick Ticket", None, "RAW"))
-      try:
-        win32print.StartPagePrinter(hPrinter)
-        win32print.WritePrinter(hPrinter, zpl_string)
-        win32print.EndPagePrinter(hPrinter)
-      finally:
-        win32print.EndDocPrinter(hPrinter)
-      if not silent: messagebox.showinfo("Success", f"Pick ticket sent to printer '{printer_name}'")
-    finally:
-      win32print.ClosePrinter(hPrinter)
-  except Exception as e:
-    if not silent: messagebox.showerror("Printer Error", f"Failed to send to printer:\\n{e}")
-
-def add_to_startup():
-  try:
-    import winreg
-    import sys
-    import os
-    
-    key = winreg.HKEY_CURRENT_USER
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    
-    with winreg.OpenKey(key, key_path, 0, winreg.KEY_ALL_ACCESS) as reg_key:
-      app_name = "SubProcessTraceability"
-      
-      if getattr(sys, 'frozen', False):
-        exe_path = f'"{sys.executable}"'
-      else:
-        exe_path = f'"{sys.executable}" "{os.path.abspath(sys.argv[0])}"'
-        
-      winreg.SetValueEx(reg_key, app_name, 0, winreg.REG_SZ, exe_path)
-  except Exception as e:
-    print(f"Could not add to startup: {e}")
-
-
 class TraceabilityApp(tk.Tk):
   def __init__(self):
     super().__init__()
@@ -807,11 +48,12 @@ class TraceabilityApp(tk.Tk):
       png_path = resource_path(os.path.join("assets", "new_main_app_logo.png"))
       if os.path.exists(png_path):
         self.iconphoto(True, tk.PhotoImage(file=png_path))
-    except: pass
+    except Exception as e:
+      logger.debug("Could not set app icon: %s", e)
     try:
       self.state('zoomed')
-    except:
-      pass
+    except Exception as e:
+      logger.debug("Could not maximize window: %s", e)
     self.configure(bg=BG_COLOR)
     self.protocol("WM_DELETE_WINDOW", self.on_closing)
     self.schedule_daily_snapshot()
@@ -961,11 +203,9 @@ class TraceabilityApp(tk.Tk):
         return
         
       try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT password, role FROM auth WHERE id = ?", (uid,))
-        result = c.fetchone()
-        conn.close()
+        with db_connection() as (conn, c):
+          c.execute("SELECT password, role FROM auth WHERE id = ?", (uid,))
+          result = c.fetchone()
         
         if result and not verify_password(upass, result[0]):
           result = None
@@ -1097,12 +337,10 @@ class TraceabilityApp(tk.Tk):
       for item in tree.get_children():
         tree.delete(item)
       try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT id, role FROM auth ORDER BY role")
-        for row in c.fetchall():
-          tree.insert("", "end", values=row)
-        conn.close()
+        with db_connection() as (conn, c):
+          c.execute("SELECT id, role FROM auth ORDER BY role")
+          for row in c.fetchall():
+            tree.insert("", "end", values=row)
       except Exception as e:
         messagebox.showerror("Error", f"Failed to load users: {e}", parent=top)
         
@@ -1114,11 +352,9 @@ class TraceabilityApp(tk.Tk):
         messagebox.showerror("Error", "ID and Password are required.", parent=top)
         return
       try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("INSERT INTO auth (id, password, role) VALUES (?, ?, ?)", (uid, hash_password(upass), role))
-        conn.commit()
-        conn.close()
+        with db_connection() as (conn, c):
+          c.execute("INSERT INTO auth (id, password, role) VALUES (?, ?, ?)", (uid, hash_password(upass), role))
+          conn.commit()
         ent_id.delete(0, tk.END)
         ent_pass.delete(0, tk.END)
         load_users()
@@ -1138,11 +374,9 @@ class TraceabilityApp(tk.Tk):
         return
       if messagebox.askyesno("Confirm Delete", f"Delete user '{uid}'?", parent=top):
         try:
-          conn = get_db_connection()
-          c = conn.cursor()
-          c.execute("DELETE FROM auth WHERE id=?", (uid,))
-          conn.commit()
-          conn.close()
+          with db_connection() as (conn, c):
+            c.execute("DELETE FROM auth WHERE id=?", (uid,))
+            conn.commit()
           load_users()
         except Exception as e:
           messagebox.showerror("Error", f"Failed to delete user: {e}", parent=top)
@@ -1189,7 +423,8 @@ class TraceabilityApp(tk.Tk):
       try:
         with open(CONFIG_FILE, "r") as f:
           config = json.load(f)
-      except: pass
+      except Exception as e:
+        logger.warning("Config load error: %s", e)
       
     if config.get("zebra_printer") in printers:
       cb.set(config.get("zebra_printer"))
@@ -1358,6 +593,16 @@ class TraceabilityApp(tk.Tk):
     entry_part_name = ttk.Entry(top_form, textvariable=var_part_name, width=30, font=HMI_FONT_M)
     entry_part_name.grid(row=1, column=1, sticky="w", pady=10)
     
+    tk.Label(top_form, text="Std Box Qty:", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).grid(row=2, column=0, sticky="e", pady=10, padx=5)
+    var_std_box_qty = tk.StringVar()
+    entry_std_box_qty = ttk.Entry(top_form, textvariable=var_std_box_qty, width=30, font=HMI_FONT_M)
+    entry_std_box_qty.grid(row=2, column=1, sticky="w", pady=10)
+    
+    tk.Label(top_form, text="Std Target/Hr/Op:", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).grid(row=3, column=0, sticky="e", pady=10, padx=5)
+    var_std_hourly_target = tk.StringVar()
+    entry_std_hourly_target = ttk.Entry(top_form, textvariable=var_std_hourly_target, width=30, font=HMI_FONT_M)
+    entry_std_hourly_target.grid(row=3, column=1, sticky="w", pady=10)
+    
     tk.Frame(form_frame, height=2, bg=BORDER_COLOR).pack(fill=tk.X, pady=15)
     
     bottom_form = tk.Frame(form_frame, bg=SURFACE_COLOR)
@@ -1384,6 +629,8 @@ class TraceabilityApp(tk.Tk):
     def set_form_state(state):
       entry_sf_pn.config(state=state)
       entry_part_name.config(state=state)
+      entry_std_box_qty.config(state=state)
+      entry_std_hourly_target.config(state=state)
       for e1, e2 in rm_entries:
         e1.config(state=state)
         e2.config(state=state)
@@ -1400,6 +647,8 @@ class TraceabilityApp(tk.Tk):
       set_form_state("normal")
       var_sf_pn.set("")
       var_part_name.set("")
+      var_std_box_qty.set("")
+      var_std_hourly_target.set("")
       for v_pn, v_name in rm_vars:
         v_pn.set("")
         v_name.set("")
@@ -1415,6 +664,8 @@ class TraceabilityApp(tk.Tk):
       var_sf_pn.set(sel_pn)
       val = SF_DATA[sel_pn]
       var_part_name.set(val[0])
+      var_std_box_qty.set(str(val[2]) if len(val) > 2 and val[2] else "")
+      var_std_hourly_target.set(str(val[3]) if len(val) > 3 and val[3] else "")
       rms = val[1]
       for i in range(4):
         if i < len(rms):
@@ -1450,17 +701,35 @@ class TraceabilityApp(tk.Tk):
         r_name = v_name.get().strip()
         if r_pn and r_name:
           rms.append((r_pn, r_name))
+          
+      try:
+        std_box_str = var_std_box_qty.get().strip()
+        if not std_box_str: raise ValueError
+        std_box = int(std_box_str)
+        if std_box <= 0: raise ValueError
+      except ValueError:
+        messagebox.showerror("Error", "Std Box Qty must be a positive integer.", parent=top)
+        return
+        
+      try:
+        std_hourly_str = var_std_hourly_target.get().strip()
+        if not std_hourly_str: raise ValueError
+        std_hourly = int(std_hourly_str)
+        if std_hourly <= 0: raise ValueError
+      except ValueError:
+        messagebox.showerror("Error", "Std Target/Hr/Op must be a positive integer.", parent=top)
+        return
       
-      SF_DATA[pn] = (name, rms)
+      SF_DATA[pn] = (name, rms, std_box, std_hourly)
       
       try:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conn = get_db_connection()
         c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO products (pn_sf, name_sf, rms_json) VALUES (?, ?, ?)", (pn, name, json.dumps(rms)))
+        c.execute("INSERT OR REPLACE INTO products (pn_sf, name_sf, rms_json, std_box_qty, std_hourly_target) VALUES (?, ?, ?, ?, ?)", (pn, name, json.dumps(rms), std_box, std_hourly))
         
         action = "ADD" if is_new else "UPDATE"
-        details = f"Name: {name}, RMs: {len(rms)}"
+        details = f"Name: {name}, RMs: {len(rms)}, StdBox: {std_box}, StdHourly: {std_hourly}"
         c.execute("INSERT INTO product_audit_trail (action, pn_sf, details, user_id, shift, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
              (action, pn, details, getattr(self, 'app_user_id', 'Unknown'), getattr(self, 'app_user_shift', 'Unknown'), timestamp))
         conn.commit()
@@ -1679,7 +948,7 @@ class TraceabilityApp(tk.Tk):
         self.settings_icon = ImageTk.PhotoImage(s_img)
         self.settings_btn.config(image=self.settings_icon, compound=tk.LEFT, text=" Settings")
     except Exception as e:
-      print("Could not load settings icon:", e)
+      logger.debug("Could not load settings icon: %s", e)
     
     # PanedWindow
     self.paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
@@ -2218,7 +1487,7 @@ class TraceabilityApp(tk.Tk):
           ws.cell(row=row, column=15).value = shift_line
       wb.save(EXCEL_FILE)
     except Exception as e:
-      print("Error updating excel:", e)
+      logger.error("Error updating excel: %s", e)
       
   def build_tab4(self):
     # Container Split
@@ -2474,7 +1743,7 @@ class TraceabilityApp(tk.Tk):
     except Exception as e:
       self.txt_timeline.insert(tk.END, f"\n\n Error generating timeline: {str(e)}", "error")
       import traceback
-      print(traceback.format_exc())
+      logger.error("Record save error:\n%s", traceback.format_exc())
       
     self.txt_timeline.config(state="disabled")
 
@@ -2514,7 +1783,8 @@ class TraceabilityApp(tk.Tk):
     if not scanned_rm: return
     
     matched_sf_pn = None
-    for sf_pn, (sf_name, rm_list) in SF_DATA.items():
+    for sf_pn, val in SF_DATA.items():
+      rm_list = val[1]
       if rm_list and rm_list[0][0] == scanned_rm:
         matched_sf_pn = sf_pn
         break
@@ -2679,11 +1949,11 @@ class TraceabilityApp(tk.Tk):
           
       if shift_ended:
         if hasattr(self, 'app_user_id') and self.app_user_id:
-          print(f"Shift ended! Forcing logout for {self.app_user_id}...")
+          logger.info("Shift ended! Forcing logout for %s...", self.app_user_id)
           self.perform_logout(force=True)
 
     except Exception as e:
-      print(f"Shift End Check Error: {e}")
+      logger.error("Shift End Check Error: %s", e)
 
   def check_and_generate_missed_reports(self):
     try:
@@ -2694,7 +1964,7 @@ class TraceabilityApp(tk.Tk):
       report_date_str = report_date.strftime("%Y-%m-%d")
       
       # Determine expected file path
-      reports_dir = os.path.join(DATA_DIR, "reports", report_date_str)
+      reports_dir = os.path.join(persistent_path("reports"), report_date_str)
       os.makedirs(reports_dir, exist_ok=True)
       expected_pdf = os.path.join(reports_dir, f"Report_{report_date_str}_Daily.pdf")
       
@@ -2708,23 +1978,23 @@ class TraceabilityApp(tk.Tk):
         start_dt = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_dt = report_date.replace(hour=23, minute=59, second=59, microsecond=999999)
         
-        print(f"Detected missed report for {report_date_str}. Triggering generation...")
+        logger.info("Detected missed report for %s. Triggering generation...", report_date_str)
         
         import threading
         def _run_gen():
           try:
             import report_generator
             report_generator.generate_daily_pdf_report(start_dt, end_dt)
-            print(f"Successfully generated missed report for {report_date_str}")
+            logger.info("Successfully generated missed report for %s", report_date_str)
           except Exception as e:
-            print(f"Failed to generate report: {e}")
+            logger.error("Failed to generate report: %s", e)
           finally:
             self._is_generating_report = False
 
         threading.Thread(target=_run_gen, daemon=True).start()
         
     except Exception as e:
-      print(f"Error checking missed reports: {e}")
+      logger.error("Error checking missed reports: %s", e)
       self._is_generating_report = False
       
     # Check again in 5 minutes
@@ -2879,7 +2149,9 @@ class TraceabilityApp(tk.Tk):
     self.rm_vars_t1 = []
 
     if sf_pn in SF_DATA:
-      sf_name, rm_list = SF_DATA[sf_pn]
+      val = SF_DATA[sf_pn]
+      sf_name = val[0]
+      rm_list = val[1]
       self.var_part_sf.set(sf_name)
       
       start_row = 4
@@ -2959,10 +2231,10 @@ class TraceabilityApp(tk.Tk):
 
   def background_excel_save(self, excel_data):
     try:
-      _excel_queue.put((save_to_excel, (excel_data,), {}))
-      _excel_queue.put((self.export_kpis_to_excel, (), {}))
+      queue_excel_task(save_to_excel, excel_data)
+      queue_excel_task(self.export_kpis_to_excel)
     except Exception as e:
-      print(f"Background Excel Save Error: {e}")
+      logger.error("Background Excel Save Error: %s", e)
 
   def save_record(self):
     sf_pn = self.cb_sf_pn.get()
@@ -3096,6 +2368,14 @@ class TraceabilityApp(tk.Tk):
         header_frame.pack(fill=tk.X)
         header_frame.pack_propagate(False)
         
+        def disable_event():
+            if is_smart_check:
+                messagebox.showwarning("Required", "You must provide a downtime reason to continue.", parent=dt_dialog)
+            else:
+                dt_dialog.destroy()
+                
+        dt_dialog.protocol("WM_DELETE_WINDOW", disable_event)
+        
         tk.Label(header_frame, text="Downtime Log" if is_smart_check else "Manual Downtime Log", 
                  bg=header_bg, fg="#ffffff", font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT, padx=20, pady=15)
         
@@ -3181,46 +2461,51 @@ class TraceabilityApp(tk.Tk):
     else:
         # Smart Check (Hour by Hour based on computer clock)
         current_time = datetime.datetime.now()
-        hour_start = current_time.replace(minute=0, second=0, microsecond=0)
         
-        elapsed_mins = (current_time - hour_start).total_seconds() / 60
-        
-        # Get target from settings (shift_targets table)
-        c.execute("SELECT target_qty FROM shift_targets WHERE product_pn=? ORDER BY id DESC LIMIT 1", (sf_pn,))
-        target_row = c.fetchone()
-        
-        if target_row:
-            db_target = target_row[0]
-            # If the user enters a full shift target (e.g., 1920), divide by 8 hours to get hourly target.
-            # If they enter the hourly target directly (e.g., 240), use it directly.
-            hourly_target = (db_target / 8.0) if db_target > 500 else db_target
-        else:
-            hourly_target = 240 # fallback
-        
-        # Get actual production THIS HOUR
-        c.execute("SELECT SUM(quantity) FROM records WHERE station=? AND shift_sp=? AND created_at >= ?", 
-                  (station, shift_sp, hour_start.strftime("%Y-%m-%d %H:%M:%S")))
-        actual_qty = c.fetchone()[0] or 0
-        actual_qty += qty # include the current box
-        
-        # Get logged downtime THIS HOUR
-        c.execute("SELECT SUM(duration_min) FROM downtime_logs WHERE station=? AND shift=? AND created_at >= ?", 
-                  (station, shift_sp, hour_start.strftime("%Y-%m-%d %H:%M:%S")))
-        logged_dt = c.fetchone()[0] or 0
-        
-        effective_elapsed = elapsed_mins - logged_dt
-        if effective_elapsed > 0:
-            expected_qty = (effective_elapsed / 60) * hourly_target
+        # Only trigger the check if we are PAST the 3.75 minutes margin into the new hour
+        if current_time.minute + (current_time.second / 60.0) >= 3.75:
+            # We evaluate the PREVIOUS full hour
+            prev_hour_end = current_time.replace(minute=0, second=0, microsecond=0) - datetime.timedelta(seconds=1)
+            prev_hour_start = prev_hour_end.replace(minute=0, second=0, microsecond=0)
             
-            if actual_qty < expected_qty:
-                deficit_qty = expected_qty - actual_qty
-                deficit_mins = (deficit_qty / hourly_target) * 60
+            # Get all products the operator worked on in the previous hour
+            c.execute("SELECT pn_sf, SUM(quantity) FROM records WHERE op_id=? AND shift_sp=? AND created_at >= ? AND created_at <= ? GROUP BY pn_sf",
+                      (op_id, shift_sp, prev_hour_start.strftime("%Y-%m-%d %H:%M:%S"), prev_hour_end.strftime("%Y-%m-%d %H:%M:%S")))
+            prod_rows = c.fetchall()
+            
+            if prod_rows:
+                earned_minutes = 0
+                has_missing_target = False
                 
-                if deficit_mins > 3.75: # 3 mins 45 seconds grace period
-                    dur, reason = prompt_downtime(is_smart_check=True, deficit_minutes=deficit_mins)
-                    if dur > 0:
-                        c.execute("INSERT INTO downtime_logs (sub_batch_id, station, shift, op_id, duration_min, reason, created_at) VALUES (?,?,?,?,?,?,?)",
-                                  (sb_id, station, shift_sp, op_id, dur, reason, created_at))
+                for row in prod_rows:
+                    pn = row[0]
+                    qty = row[1]
+                    
+                    # Get target for that specific product from SF_DATA
+                    val = SF_DATA.get(pn)
+                    hourly_target = val[3] if val and len(val) > 3 else None
+                    
+                    if hourly_target and hourly_target > 0:
+                        earned_minutes += (qty / hourly_target) * 60
+                    else:
+                        has_missing_target = True
+                        break # Skip check if any product is missing a target
+                
+                if not has_missing_target:
+                    # Get logged downtime for the PREVIOUS hour for this operator
+                    c.execute("SELECT SUM(duration_min) FROM downtime_logs WHERE op_id=? AND shift=? AND created_at >= ? AND created_at <= ?", 
+                              (op_id, shift_sp, prev_hour_start.strftime("%Y-%m-%d %H:%M:%S"), prev_hour_end.strftime("%Y-%m-%d %H:%M:%S")))
+                    logged_dt = c.fetchone()[0] or 0
+                    
+                    effective_elapsed = 60 - logged_dt
+                    deficit_mins = effective_elapsed - earned_minutes
+                    
+                    if deficit_mins > 3.75: # Grace period
+                        dur, reason = prompt_downtime(is_smart_check=True, deficit_minutes=deficit_mins)
+                        if dur > 0:
+                            dt_created_at = prev_hour_end.strftime("%Y-%m-%d %H:%M:%S")
+                            c.execute("INSERT INTO downtime_logs (sub_batch_id, station, shift, op_id, duration_min, reason, created_at) VALUES (?,?,?,?,?,?,?)",
+                                      (sb_id, station, shift_sp, op_id, dur, reason, dt_created_at))
     # --- END DOWNTIME TRACKING LOGIC ---
 
     data = (
@@ -3292,7 +2577,7 @@ class TraceabilityApp(tk.Tk):
       if row_print:
         print_html_slip(dict(row_print), silent=True)
     except Exception as e:
-      print("Auto-print failed:", e)
+      logger.error("Auto-print failed: %s", e)
     
     # update recent PNs sidebar
     pns = self.recent_pns_listbox.get(0, tk.END)
@@ -3307,14 +2592,12 @@ class TraceabilityApp(tk.Tk):
     for item in self.tree_recent.get_children():
       self.tree_recent.delete(item)
       
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("""SELECT r.sub_batch_id, r.pn_sf, r.quantity, r.shift_sp, r.station, r.dt_sp, IFNULL(SUM(CASE WHEN q.status='Closed' AND q.action_type IN ('Rework', 'Sorting', 'Use As-Is') THEN 0 ELSE q.qty_defective END), 0)
+    with db_connection() as (conn, c):
+      c.execute("""SELECT r.sub_batch_id, r.pn_sf, r.quantity, r.shift_sp, r.station, r.dt_sp, IFNULL(SUM(CASE WHEN q.status='Closed' AND q.action_type IN ('Rework', 'Sorting', 'Use As-Is') THEN 0 ELSE q.qty_defective END), 0)
                  FROM records r 
                  LEFT JOIN quality_defects q ON r.sub_batch_id = q.sub_batch_id 
                  GROUP BY r.id ORDER BY r.id DESC LIMIT 5""")
-    rows = c.fetchall()
-    conn.close()
+      rows = c.fetchall()
     
     for i, row in enumerate(rows):
       orig_qty = row[2]
@@ -3356,11 +2639,9 @@ class TraceabilityApp(tk.Tk):
       
     base_query += " GROUP BY r.id ORDER BY r.id DESC"
     
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(base_query, params)
-    rows = c.fetchall()
-    conn.close()
+    with db_connection() as (conn, c):
+      c.execute(base_query, params)
+      rows = c.fetchall()
     
     total_count = len(rows)
     self.records_per_page = 20
@@ -3612,7 +2893,7 @@ class TraceabilityApp(tk.Tk):
         record_data['last_reprinted_by'] = getattr(self, 'app_user_id', '')
         record_data['last_reprinted_at'] = now_str
       except Exception as e:
-        print(f"Failed to update reprint audit trail: {e}")
+        logger.error("Failed to update reprint audit trail: %s", e)
         
       # Print silently
       print_html_slip(record_data, silent=True)
@@ -3804,9 +3085,10 @@ class TraceabilityApp(tk.Tk):
     c = conn.cursor()
     
     # Aggregated with threshold
-    c.execute('''SELECT r.pn_sf, r.part_sf, SUM(r.quantity), COUNT(r.id), COALESCE(t.min_qty, 0)
+    c.execute('''SELECT r.pn_sf, r.part_sf, SUM(r.quantity), p.std_box_qty, COALESCE(t.min_qty, 0)
            FROM records r
            LEFT JOIN part_thresholds t ON r.pn_sf = t.pn_sf
+           LEFT JOIN products p ON r.pn_sf = p.pn_sf
            WHERE r.status="In Rack"
            GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC''')
     agg_rows = c.fetchall()
@@ -3829,7 +3111,7 @@ class TraceabilityApp(tk.Tk):
     total_boxes = 0
     
     for row in agg_rows:
-      pn, part, total_qty, box_count, min_qty = row
+      pn, part, total_qty, std_box_qty, min_qty = row
       if search_q and search_q not in pn.lower() and search_q not in part.lower():
         continue
       
@@ -3838,13 +3120,24 @@ class TraceabilityApp(tk.Tk):
         tag = "low_wip"
         low_wip_count += 1
         
-      self.tree_inv_agg.insert("", "end", values=(pn, part, total_qty, min_qty, box_count), tags=(tag,))
+      std_box = std_box_qty
+      if std_box and std_box > 0:
+        full_boxes = total_qty // std_box
+        extra = total_qty % std_box
+        if extra > 0:
+          box_display = f"{full_boxes} Box(es) + {extra} pcs"
+        else:
+          box_display = f"{full_boxes} Box(es)"
+        total_boxes += full_boxes
+      else:
+        box_display = "N/A"
+        
+      self.tree_inv_agg.insert("", "end", values=(pn, part, total_qty, min_qty, box_display), tags=(tag,))
       pn_labels.append(pn[:15])
       part_labels.append(part[:25])
       full_pns.append(pn)
       qty_values.append(total_qty or 0)
       min_values.append(min_qty or 0)
-      total_boxes += box_count
       
     now = datetime.datetime.now()
     age_counts = {"< 2 Days": 0, "2-7 Days": 0, "> 7 Days": 0}
@@ -3863,7 +3156,8 @@ class TraceabilityApp(tk.Tk):
           dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
         if pn not in pn_oldest_dt or dt_obj < pn_oldest_dt[pn]:
           pn_oldest_dt[pn] = dt_obj
-      except: pass
+      except Exception as e:
+        logger.debug("Date parse error in inventory: %s", e)
       
     for row in det_rows:
       pn = row[1]
@@ -4287,11 +3581,25 @@ class TraceabilityApp(tk.Tk):
         sorted_dates = sorted(list(dates_set))
         x_labels = [d[5:] for d in sorted_dates]
         
+        plotted_any = False
         for pn, data_dict in pn_series.items():
-          y_vals = [data_dict.get(d, 0) for d in sorted_dates]
-          self.ax_trend.plot(x_labels, y_vals, marker='o', markersize=4, label=pn)
+          if pn == "NONE":
+            continue
           
-        self.ax_trend.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=1, fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
+          # Try to get the friendly name from SF_DATA
+          display_name = pn
+          if pn in SF_DATA and SF_DATA[pn][0]:
+            display_name = SF_DATA[pn][0]
+            
+          y_vals = [data_dict.get(d, 0) for d in sorted_dates]
+          self.ax_trend.plot(x_labels, y_vals, marker='o', markersize=4, label=display_name)
+          plotted_any = True
+          
+        if plotted_any:
+          self.ax_trend.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=1, fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
+        else:
+          self.ax_trend.text(0.5, 0.5, "No active inventory tracked", ha='center', va='center', color=TEXT_MUTED, transform=self.ax_trend.transAxes)
+          
         self.ax_trend.tick_params(axis='x', rotation=45, labelsize=8)
       else:
         self.ax_trend.text(0.5, 0.5, "No Snapshot Data Yet\n(Snapshots are taken nightly at 23:50)", ha='center', va='center', color=TEXT_MUTED, transform=self.ax_trend.transAxes)
@@ -4377,7 +3685,7 @@ class TraceabilityApp(tk.Tk):
 
       conn.close()
     except Exception as e:
-      print("KPI Refresh Error:", e)
+      logger.error("KPI Refresh Error: %s", e)
 
   def export_kpis_to_excel(self):
     try:
@@ -4554,7 +3862,7 @@ class TraceabilityApp(tk.Tk):
       conn.close()
       wb.save(EXCEL_FILE)
     except Exception as e:
-      print(f"Background KPI Export Error: {e}")
+      logger.error("Background KPI Export Error: %s", e)
 
   def open_excel(self):
     if os.path.exists(EXCEL_FILE):
@@ -4584,7 +3892,8 @@ class TraceabilityApp(tk.Tk):
           dt_obj = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
         if pn not in oldest_dt_per_pn or dt_obj < oldest_dt_per_pn[pn]:
           oldest_dt_per_pn[pn] = dt_obj
-      except: pass
+      except Exception as e:
+        logger.debug("Date parse error in snapshot: %s", e)
       
     if not agg_rows:
       c.execute('''INSERT OR REPLACE INTO inventory_snapshots 
@@ -4604,7 +3913,7 @@ class TraceabilityApp(tk.Tk):
                (date_str, pn, box_count, total_qty, oldest_age_hours))
     conn.commit()
     conn.close()
-    print(f"[{datetime.datetime.now()}] Automated Inventory Snapshot Taken for {date_str}.")
+    logger.info("Automated Inventory Snapshot Taken for %s.", date_str)
     
   def schedule_daily_snapshot(self):
     now = datetime.datetime.now()
@@ -4621,7 +3930,7 @@ class TraceabilityApp(tk.Tk):
       if count == 0:
         self.take_snapshot(yesterday_str)
     except Exception as e:
-      print("Error checking/taking daily snapshot:", e)
+      logger.error("Error checking/taking daily snapshot: %s", e)
 
     self.after(60000, self.schedule_daily_snapshot)
 
