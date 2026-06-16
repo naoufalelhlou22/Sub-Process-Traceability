@@ -5,7 +5,6 @@ __pycache__/
 
 # Build and distribution directories
 build/
-dist/
 installer/
 *.egg-info/
 .eggs/
