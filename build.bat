@@ -30,4 +30,8 @@ echo  BUILD COMPLETE
 echo ============================================================
 echo You can find the compiled .exe files inside the "dist" folder.
 echo.
+echo --- Compiling Windows Installer (Setup.exe) ---
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+echo Installer successfully created in the "installer" folder!
+echo.
 pause

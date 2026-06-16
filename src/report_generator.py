@@ -262,7 +262,7 @@ def _build_pdf(target_date, report_type_label, start_dt_str, end_dt_str, total_b
             pdf.set_font("helvetica", "", 10)
             
         pdf.set_fill_color(245, 245, 245) if i % 2 == 0 else pdf.set_fill_color(255, 255, 255)
-        pn, name, qty = row
+        pn, name, qty = row[0], row[1], row[2]
         pdf.cell(60, 8, str(pn)[:25], border=1, align='C', fill=True)
         pdf.cell(100, 8, str(name)[:45], border=1, align='C', fill=True)
         pdf.cell(30, 8, str(qty), border=1, align='C', fill=True, new_x="LMARGIN", new_y="NEXT")
@@ -362,7 +362,7 @@ def _build_pdf(target_date, report_type_label, start_dt_str, end_dt_str, total_b
             if std and std > 0:
                 fb = (qty or 0) // std
                 ex = (qty or 0) % std
-                count_str = f"{fb} B + {ex} p" if ex > 0 else f"{fb} B"
+                count_str = f"{fb} Box(es) + {ex} pcs" if ex > 0 else f"{fb} Box(es)"
             else:
                 count_str = "N/A"
             pdf.cell(90, 8, str(pn)[:35], border=1, align='C', fill=True)

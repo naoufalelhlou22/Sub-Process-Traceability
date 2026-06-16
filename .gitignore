@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build and distribution directories
+build/
+dist/
+installer/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.env
+.venv
+
+# Output and runtime files
+*.log
+*.pdf
+*.zpl
+*.db
+*.xlsx
+
+# IDEs
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

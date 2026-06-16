@@ -16,9 +16,20 @@ def resource_path(relative_path):
   return os.path.join(base_path, relative_path)
 
 def persistent_path(relative_path):
-  """ Get absolute path to persistent data, relative to executable """
+  """ Get absolute path to persistent data, relative to executable or AppData if read-only """
   if hasattr(sys, '_MEIPASS'):
-    base_path = os.path.dirname(sys.executable)
+    exe_dir = os.path.dirname(sys.executable)
+    # Check if the executable directory is writable (for portable usage)
+    try:
+      test_file = os.path.join(exe_dir, '.write_test')
+      with open(test_file, 'w') as f:
+        f.write('test')
+      os.remove(test_file)
+      base_path = exe_dir
+    except (IOError, OSError, PermissionError):
+      # Fallback to Documents folder for installed instances (e.g. in Program Files)
+      app_data = os.path.join(os.path.expanduser('~'), 'Documents')
+      base_path = os.path.join(app_data, 'SubProcessTraceability')
   else:
     base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
   return os.path.join(base_path, relative_path)

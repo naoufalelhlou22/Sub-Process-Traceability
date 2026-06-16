@@ -43,7 +43,11 @@ class TraceabilityApp(tk.Tk):
   def __init__(self):
     super().__init__()
     self.title(f"HI-LEX ACT - Sub-Process Traceability System v{APP_VERSION}")
-    self.geometry("1280x800")
+    
+    # Set geometry dynamically based on the device's screen settings
+    screen_width = self.winfo_screenwidth()
+    screen_height = self.winfo_screenheight()
+    self.geometry(f"{screen_width}x{screen_height}+0+0")
     try:
       png_path = resource_path(os.path.join("assets", "new_main_app_logo.png"))
       if os.path.exists(png_path):
@@ -269,14 +273,14 @@ class TraceabilityApp(tk.Tk):
 
   def create_card(self, parent, title, fg_color=TEXT_COLOR):
     card = tk.Frame(parent, bg=SURFACE_COLOR)
-    card.pack(fill=tk.X, pady=5, padx=5)
+    card.pack(fill=tk.X, pady=2, padx=5)
     
-    title_lbl = tk.Label(card, text=title, bg=SURFACE_COLOR, fg=fg_color, font=HMI_FONT_M, anchor="w", padx=10, pady=5)
+    title_lbl = tk.Label(card, text=title, bg=SURFACE_COLOR, fg=fg_color, font=HMI_FONT_M, anchor="w", padx=10, pady=2)
     title_lbl.pack(fill=tk.X)
     
     tk.Frame(card, bg=BORDER_COLOR, height=1).pack(fill=tk.X)
     
-    content = tk.Frame(card, bg=SURFACE_COLOR, padx=10, pady=10)
+    content = tk.Frame(card, bg=SURFACE_COLOR, padx=10, pady=2)
     content.pack(fill=tk.BOTH, expand=True)
     return card, content
 
@@ -960,9 +964,9 @@ class TraceabilityApp(tk.Tk):
     self.paned.add(self.sidebar, weight=0)
     
     self.lbl_clock = tk.Label(self.sidebar, text="00:00", bg=SURFACE_COLOR, fg=ACCENT_COLOR, font=("Consolas", 28, "bold"))
-    self.lbl_clock.pack(pady=(20,0))
+    self.lbl_clock.pack(pady=(10,0))
     self.lbl_date = tk.Label(self.sidebar, text="YYYY-MM-DD", bg=SURFACE_COLOR, fg=TEXT_MUTED, font=HMI_FONT_S)
-    self.lbl_date.pack(pady=(0, 20))
+    self.lbl_date.pack(pady=(0, 10))
 
     
     tk.Label(self.sidebar, text="SHIFT OVERVIEW", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack()
@@ -980,9 +984,9 @@ class TraceabilityApp(tk.Tk):
     self.lbl_title_qty, self.side_stat_qty = create_side_kpi(self.sidebar, "Qty (Shift -)")
     _, self.side_stat_today = create_side_kpi(self.sidebar, "Total Today")
     
-    tk.Label(self.sidebar, text="RECENT PNs", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(pady=(10,0))
-    self.recent_pns_listbox = tk.Listbox(self.sidebar, bg=BG_COLOR, fg=TEXT_COLOR, bd=0, relief="flat", height=8, font=HMI_FONT_S)
-    self.recent_pns_listbox.pack(fill=tk.X, padx=15, pady=10)
+    tk.Label(self.sidebar, text="RECENT PNs", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(pady=(5,0))
+    self.recent_pns_listbox = tk.Listbox(self.sidebar, bg=BG_COLOR, fg=TEXT_COLOR, bd=0, relief="flat", height=6, font=HMI_FONT_S)
+    self.recent_pns_listbox.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
     
     ttk.Button(self.sidebar, text="Open Excel", style="Secondary.TButton", command=self.open_excel).pack(fill=tk.X, padx=10, pady=2)
     ttk.Button(self.sidebar, text="Print Last Slip", style="Warning.TButton", command=self.print_last_slip).pack(fill=tk.X, padx=10, pady=2)
@@ -1098,12 +1102,12 @@ class TraceabilityApp(tk.Tk):
     except Exception:
       pass
   def build_tab1(self):
-    # Container Split
+    # Container Split - Pack bottom first so it's not pushed off by expanding top panel
+    bottom_panel = tk.Frame(self.tab1, bg=BG_COLOR)
+    bottom_panel.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=2)
+
     top_panel = tk.Frame(self.tab1, bg=BG_COLOR)
     top_panel.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-    
-    bottom_panel = tk.Frame(self.tab1, bg=BG_COLOR)
-    bottom_panel.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=5)
 
     # 2-Column Layout
     self.t1_left = tk.Frame(top_panel, bg=BG_COLOR, width=400)
@@ -1177,7 +1181,7 @@ class TraceabilityApp(tk.Tk):
 
     # ---------------- RIGHT PANEL (FORM) ----------------
     self.form_frame = tk.Frame(self.t1_right, bg=BG_COLOR)
-    self.form_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=20, pady=10)
+    self.form_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=20, pady=2)
     
     self.form_col_left = tk.Frame(self.form_frame, bg=BG_COLOR)
     self.form_col_left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
@@ -2945,12 +2949,12 @@ class TraceabilityApp(tk.Tk):
     right_pane = tk.Frame(paned, bg=BG_COLOR)
     paned.add(right_pane, weight=1)
     
-    table_paned = ttk.PanedWindow(left_pane, orient=tk.VERTICAL)
+    table_paned = tk.Frame(left_pane, bg=BG_COLOR)
     table_paned.pack(fill=tk.BOTH, expand=True, padx=(0, 10))
 
     # Row 1: Summary Table
     row1 = tk.Frame(table_paned, bg=BG_COLOR)
-    table_paned.add(row1, weight=1)
+    row1.pack(fill=tk.BOTH, expand=True)
 
     _, agg_card = self.create_card(row1, "Summary by Part Number (Right-Click to Set Min Threshold)")
     cols_agg = ("PN", "Part Name", "Total", "Min", "Boxes")
@@ -2981,7 +2985,7 @@ class TraceabilityApp(tk.Tk):
     
     # Row 2: Details Table
     row2 = tk.Frame(table_paned, bg=BG_COLOR)
-    table_paned.add(row2, weight=1)
+    row2.pack(fill=tk.BOTH, expand=True)
     
     _, det_card = self.create_card(row2, "Detailed Rack Content (FIFO)")
     cols_det = ("SB_ID", "PN", "Qty", "Age", "Status")
@@ -3112,7 +3116,9 @@ class TraceabilityApp(tk.Tk):
     
     for row in agg_rows:
       pn, part, total_qty, std_box_qty, min_qty = row
-      if search_q and search_q not in pn.lower() and search_q not in part.lower():
+      pn_str = pn or ""
+      part_str = part or "None"
+      if search_q and search_q not in pn_str.lower() and search_q not in part_str.lower():
         continue
       
       tag = ""
@@ -3132,10 +3138,10 @@ class TraceabilityApp(tk.Tk):
       else:
         box_display = "N/A"
         
-      self.tree_inv_agg.insert("", "end", values=(pn, part, total_qty, min_qty, box_display), tags=(tag,))
-      pn_labels.append(pn[:15])
-      part_labels.append(part[:25])
-      full_pns.append(pn)
+      self.tree_inv_agg.insert("", "end", values=(pn_str, part_str, total_qty, min_qty, box_display), tags=(tag,))
+      pn_labels.append(pn_str[:15])
+      part_labels.append(part_str[:25])
+      full_pns.append(pn_str)
       qty_values.append(total_qty or 0)
       min_values.append(min_qty or 0)
       
@@ -3161,7 +3167,8 @@ class TraceabilityApp(tk.Tk):
       
     for row in det_rows:
       pn = row[1]
-      if search_q and search_q not in pn.lower():
+      pn_str = pn or ""
+      if search_q and search_q not in pn_str.lower():
         continue
         
       dt_str = row[3]
