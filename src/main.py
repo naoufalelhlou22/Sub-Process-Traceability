@@ -3540,7 +3540,7 @@ class TraceabilityApp(tk.Tk):
       if op_data:
         ops = [f"Op: {row[0]}" for row in op_data]
         o_qts = [row[1] for row in op_data]
-        wedges, texts, autotexts = self.ax_op.pie(o_qts, autopct='%1.1f%%', textprops={'color': 'white', 'fontsize': 8, 'weight': 'bold'}, radius=0.9, startangle=140)
+        wedges, *_ = self.ax_op.pie(o_qts, autopct='%1.1f%%', textprops={'color': 'white', 'fontsize': 8, 'weight': 'bold'}, radius=0.9, startangle=140)
         self.ax_op.legend(wedges, ops, loc="center left", bbox_to_anchor=(0.85, 0.5), fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
       self.fig_op.tight_layout(rect=(0, 0, 1, 0.95))
       self.render_chart_to_label(self.fig_op, self.lbl_chart_op)
@@ -3561,7 +3561,7 @@ class TraceabilityApp(tk.Tk):
           else:
             pns_labels.append(p.split('-')[-1] if '-' in p else p[:8])
         p_qts = [row[1] for row in pn_data]
-        wedges, texts, autotexts = self.ax_pn.pie(p_qts, autopct='%1.1f%%', textprops={'color': 'white', 'fontsize': 8, 'weight': 'bold'}, radius=0.9, startangle=140)
+        wedges, *_ = self.ax_pn.pie(p_qts, autopct='%1.1f%%', textprops={'color': 'white', 'fontsize': 8, 'weight': 'bold'}, radius=0.9, startangle=140)
         self.ax_pn.legend(wedges, pns_labels, loc="center left", bbox_to_anchor=(0.85, 0.5), fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
       self.fig_pn.tight_layout(rect=(0, 0, 1, 0.95))
       self.render_chart_to_label(self.fig_pn, self.lbl_chart_pn)
@@ -3641,7 +3641,7 @@ class TraceabilityApp(tk.Tk):
       if reason_data:
         r_labels = [row[0][:25] for row in reason_data]
         r_vals = [row[1] for row in reason_data]
-        wedges, texts, autotexts = self.ax_dt_reasons.pie(r_vals, autopct='%1.0f%%', textprops={'color': 'white', 'fontsize': 8, 'weight': 'bold'}, radius=0.9)
+        wedges, *_ = self.ax_dt_reasons.pie(r_vals, autopct='%1.0f%%', textprops={'color': 'white', 'fontsize': 8, 'weight': 'bold'}, radius=0.9)
         self.ax_dt_reasons.legend(wedges, r_labels, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=2, fontsize=8, facecolor=BG_COLOR, edgecolor=BORDER_COLOR, labelcolor=TEXT_COLOR)
       else:
         self.ax_dt_reasons.text(0.5, 0.5, "No Delays Recorded", ha='center', va='center', color=TEXT_MUTED, transform=self.ax_dt_reasons.transAxes)

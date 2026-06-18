@@ -4,6 +4,7 @@ __pycache__/
 *.so
 
 # Build and distribution directories
+tests/
 build/
 installer/
 *.egg-info/

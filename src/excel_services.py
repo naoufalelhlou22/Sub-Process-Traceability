@@ -48,8 +48,7 @@ def rebuild_excel_from_db():
   
   headers = [
     "SB ID", "FULL PN Semi fini", "PART NAME (SF)", 
-    "RM PN", "RM Name",
-    "Batch No. 1", "Batch No. 2", "Batch No. 3", "Quantity",
+    "RM PN", "RM Name", "Batch No. 1", "Batch No. 2", "Batch No. 3", "Quantity",
     "Work in Sub-Process by Shift", "Op ID", "Station",
     "Sub-Process Work Date/Time", "Production Line Entry Date/Time",
     "Work in PROD line by Shift", "Remarks", "Registered by ID"
@@ -82,16 +81,35 @@ def rebuild_excel_from_db():
   rows = c.fetchall()
   conn.close()
   
+  batch_tracker = {}
+  
   for row in rows:
+    change_counts = []
+    rm_pns = [row["rm1_pn"], row["rm2_pn"], row["rm3_pn"], row["rm4_pn"]]
+    batches = [row["batch1"], row["batch2"], row["batch3"], row.get("batch4", "")]
+    
+    for i in range(4):
+      rm_pn = rm_pns[i]
+      batch = str(batches[i]).strip() if batches[i] else ""
+      if rm_pn and batch:
+        if rm_pn not in batch_tracker:
+          batch_tracker[rm_pn] = {"current": batch, "count": 0}
+        elif batch_tracker[rm_pn]["current"] != batch:
+          batch_tracker[rm_pn]["count"] += 1
+          batch_tracker[rm_pn]["current"] = batch
+        change_counts.append(batch_tracker[rm_pn]["count"])
+      else:
+        change_counts.append(0)
+        
     data = [
       row["sub_batch_id"], row["pn_sf"], row["part_sf"],
       row["rm1_pn"], row["rm1_name"], row["rm2_pn"], row["rm2_name"],
       row["rm3_pn"], row["rm3_name"], row["rm4_pn"], row["rm4_name"],
-      row["batch1"], row["batch2"], row["batch3"], row["quantity"],
-      row["shift_sp"], row["op_id"], row["station"], row["dt_sp"], row["dt_line"],
+      row["batch1"], row["batch2"], row["batch3"], row.get("batch4", ""),
+      row["quantity"], row["shift_sp"], row["op_id"], row["station"], row["dt_sp"], row["dt_line"],
       row["shift_line"], row["remarks"], row["registered_by"]
     ]
-    _write_record_to_ws(ws, data)
+    _write_record_to_ws(ws, data, change_counts)
     
   wb.save(EXCEL_FILE)
 
@@ -108,13 +126,54 @@ def save_to_excel(data):
       rebuild_excel_from_db()
       return
       
-    _write_record_to_ws(ws, data)
+    change_counts = []
+    conn = get_db_connection()
+    c = conn.cursor()
+    for i in range(4):
+      rm_pn = data[3 + i*2]
+      if not rm_pn:
+        change_counts.append(0)
+        continue
+      
+      try:
+        c.execute("""
+          SELECT 
+            CASE 
+              WHEN rm1_pn = ? THEN batch1
+              WHEN rm2_pn = ? THEN batch2
+              WHEN rm3_pn = ? THEN batch3
+              WHEN rm4_pn = ? THEN batch4
+            END
+          FROM records 
+          WHERE ? IN (rm1_pn, rm2_pn, rm3_pn, rm4_pn)
+          ORDER BY id ASC
+        """, (rm_pn, rm_pn, rm_pn, rm_pn, rm_pn))
+        
+        hist_rows = c.fetchall()
+        count = 0
+        current = None
+        for r in hist_rows:
+          b = str(r[0]).strip() if r[0] else ""
+          if not b: continue
+          if current is None:
+            current = b
+          elif b != current:
+            count += 1
+            current = b
+        change_counts.append(count)
+      except Exception as e:
+        logger.error("Error calculating batch change: %s", e)
+        change_counts.append(0)
+        
+    conn.close()
+    
+    _write_record_to_ws(ws, data, change_counts)
     wb.save(EXCEL_FILE)
   except Exception as e:
     logger.error("Error loading Excel file: %s", e)
     return
 
-def _write_record_to_ws(ws, data):
+def _write_record_to_ws(ws, data, change_counts):
   sb_id = data[0] if data[0] else "-"
   sf_pn = data[1] if data[1] else "-"
   part_sf = data[2] if data[2] else "-"
@@ -122,14 +181,26 @@ def _write_record_to_ws(ws, data):
   for i in range(4):
     rm_pn = data[3 + i*2]
     rm_name = data[4 + i*2]
+    batch_no = str(data[11 + i]).strip() if data[11 + i] else ""
+    c_count = change_counts[i] if i < len(change_counts) else 0
+    b1, b2, b3 = "-", "-", "-"
+    
+    if batch_no:
+      if c_count == 0:
+        b1 = batch_no
+      elif c_count == 1:
+        b2 = batch_no
+      else:
+        b3 = batch_no
+        
     if rm_pn:
-      rms.append((rm_pn if rm_pn else "-", rm_name if rm_name else "-"))
+      rms.append((rm_pn if rm_pn else "-", rm_name if rm_name else "-", b1, b2, b3))
       
   if not rms:
-    rms = [("-", "-")]
+    rms = [("-", "-", "-", "-", "-")]
     
   num_rms = len(rms)
-  rest_data = ["-" if (x == "" or x is None) else x for x in data[11:]]
+  rest_data = ["-" if (x == "" or x is None) else x for x in data[15:]]
   
   start_row = ws.max_row + 1
   end_row = start_row + num_rms - 1
@@ -138,11 +209,11 @@ def _write_record_to_ws(ws, data):
     row_data = []
     if i == 0:
       row_data.extend([sb_id, sf_pn, part_sf])
-      row_data.extend([rms[i][0], rms[i][1]])
+      row_data.extend([rms[i][0], rms[i][1], rms[i][2], rms[i][3], rms[i][4]])
       row_data.extend(rest_data)
     else:
       row_data.extend([None, None, None])
-      row_data.extend([rms[i][0], rms[i][1]])
+      row_data.extend([rms[i][0], rms[i][1], rms[i][2], rms[i][3], rms[i][4]])
       row_data.extend([None] * len(rest_data))
     ws.append(row_data)
     
@@ -150,7 +221,7 @@ def _write_record_to_ws(ws, data):
     ws.merge_cells(start_row=start_row, start_column=1, end_row=end_row, end_column=1)
     ws.merge_cells(start_row=start_row, start_column=2, end_row=end_row, end_column=2)
     ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
-    for col in range(6, 18):
+    for col in range(9, 18):
       ws.merge_cells(start_row=start_row, start_column=col, end_row=end_row, end_column=col)
   
   sf_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")

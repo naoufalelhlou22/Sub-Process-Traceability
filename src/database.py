@@ -214,6 +214,17 @@ def init_db():
   ''')
   c.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (1)")
   
+  c.execute('''
+    CREATE TABLE IF NOT EXISTS operators (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      op_id TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      certified_stations TEXT,
+      certified_pns TEXT
+    )
+  ''')
+  
   try:
     default_users = [
       ('admin', os.environ.get('ADMIN_PASS', 'admin'), 'Manager')
@@ -244,6 +255,7 @@ def init_db():
       batch1 TEXT,
       batch2 TEXT,
       batch3 TEXT,
+      batch4 TEXT,
       quantity INTEGER,
       shift_sp TEXT,
       op_id TEXT,
@@ -259,6 +271,11 @@ def init_db():
   
   try:
     c.execute("ALTER TABLE records ADD COLUMN registered_by TEXT DEFAULT ''")
+  except sqlite3.OperationalError:
+    pass
+    
+  try:
+    c.execute("ALTER TABLE records ADD COLUMN batch4 TEXT")
   except sqlite3.OperationalError:
     pass
     

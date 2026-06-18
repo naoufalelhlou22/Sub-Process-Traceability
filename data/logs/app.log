@@ -15,3 +15,36 @@
 2026-06-14 16:14:16 [INFO] TraceabilityApp: Successfully generated missed report for 2026-06-13
 2026-06-14 16:33:52 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
 2026-06-14 16:33:52 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-16 23:02:32 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-16 23:02:32 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-16 23:02:32 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-06-15.
+2026-06-16 23:02:37 [INFO] TraceabilityApp: Detected missed report for 2026-06-15. Triggering generation...
+2026-06-16 23:02:37 [INFO] TraceabilityApp: Successfully generated missed report for 2026-06-15
+2026-06-17 11:27:14 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-17 11:27:14 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-17 11:27:14 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-06-16.
+2026-06-17 23:43:35 [INFO] TraceabilityApp: Detected missed report for 2026-06-16. Triggering generation...
+2026-06-17 23:43:36 [INFO] TraceabilityApp: Successfully generated missed report for 2026-06-16
+2026-06-18 00:02:15 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-18 00:02:15 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-18 00:02:15 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-06-17.
+2026-06-18 00:02:20 [INFO] TraceabilityApp: Detected missed report for 2026-06-17. Triggering generation...
+2026-06-18 00:02:22 [INFO] TraceabilityApp: Successfully generated missed report for 2026-06-17
+2026-06-18 00:17:23 [ERROR] TraceabilityApp: Error loading Excel file: [Errno 13] Permission denied: 'C:\\Users\\Mr_X\\Desktop\\Sub-Process Traceability\\data\\production_data.xlsx'
+2026-06-18 00:17:23 [ERROR] TraceabilityApp: Background KPI Export Error: [Errno 13] Permission denied: 'C:\\Users\\Mr_X\\Desktop\\Sub-Process Traceability\\data\\production_data.xlsx'
+2026-06-18 00:17:40 [ERROR] TraceabilityApp: Error loading Excel file: [Errno 13] Permission denied: 'C:\\Users\\Mr_X\\Desktop\\Sub-Process Traceability\\data\\production_data.xlsx'
+2026-06-18 00:17:40 [ERROR] TraceabilityApp: Background KPI Export Error: [Errno 13] Permission denied: 'C:\\Users\\Mr_X\\Desktop\\Sub-Process Traceability\\data\\production_data.xlsx'
+2026-06-18 01:00:35 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:00:35 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:15:47 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:15:47 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:25:41 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:25:41 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:34:28 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:34:28 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:34:30 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:34:30 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:34:32 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:34:32 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:38:14 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-06-18 01:38:14 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None

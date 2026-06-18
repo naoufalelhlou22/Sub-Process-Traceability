@@ -4,14 +4,7 @@ import datetime
 from fpdf import FPDF
 import sys
 
-def persistent_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        base_path = os.path.dirname(sys.executable)
-    else:
-        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    return os.path.join(base_path, relative_path)
-
-DB_FILE = os.path.join(persistent_path("data"), "traceability.db")
+from config import persistent_path, DB_FILE
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
     conn.execute('PRAGMA journal_mode=WAL')

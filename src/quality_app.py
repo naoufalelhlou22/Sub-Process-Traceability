@@ -15,23 +15,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import hashlib
 import binascii
 
-def resource_path(relative_path):
-  try:
-    base_path = sys._MEIPASS
-  except Exception:
-    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-  return os.path.join(base_path, relative_path)
-
-def persistent_path(relative_path):
-  if hasattr(sys, '_MEIPASS'):
-    base_path = os.path.dirname(sys.executable)
-  else:
-    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-  return os.path.join(base_path, relative_path)
-
-DATA_DIR = persistent_path("data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_FILE = os.path.join(DATA_DIR, "traceability.db")
+from config import resource_path, persistent_path, DATA_DIR, DB_FILE
 
 def get_db_connection():
   conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
