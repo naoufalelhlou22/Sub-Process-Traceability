@@ -2500,12 +2500,7 @@ class TraceabilityApp(tk.Tk):
             except ValueError:
                 messagebox.showerror("Error", "Please enter a valid number for minutes.", parent=dt_dialog)
                 
-        def on_skip():
-            dt_dialog.destroy()
-            
         ttk.Button(btn_frame, text="Save Downtime", style="Success.TButton", command=on_submit).pack(side=tk.RIGHT, ipadx=15, ipady=5)
-        if not is_smart_check:
-            ttk.Button(btn_frame, text="No Downtime (Skip)", command=on_skip).pack(side=tk.RIGHT, padx=10, ipadx=5, ipady=5)
             
         self.wait_window(dt_dialog)
         return dt_result["duration"], dt_result["reason"]
@@ -3170,7 +3165,7 @@ class TraceabilityApp(tk.Tk):
     for row in agg_rows:
       pn, part, total_qty, std_box_qty, min_qty = row
       pn_str = pn or ""
-      part_str = part or "None"
+      part_str = part if part and str(part).lower() != "none" else "-"
       if search_q and search_q not in pn_str.lower() and search_q not in part_str.lower():
         continue
       

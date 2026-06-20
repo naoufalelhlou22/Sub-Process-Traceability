@@ -8,7 +8,7 @@ DefaultGroupName=Sub-Process Traceability
 ; The setup file it will generate
 OutputDir=installer
 OutputBaseFilename=TraceabilitySystem_Setup
-SetupIconFile=assets\icon.ico
+SetupIconFile=assets\data-management.ico
 Compression=lzma
 SolidCompression=yes
 ; Require admin rights to install to Program Files
