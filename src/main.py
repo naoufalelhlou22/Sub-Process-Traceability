@@ -49,7 +49,7 @@ class TraceabilityApp(tk.Tk):
     screen_height = self.winfo_screenheight()
     self.geometry(f"{screen_width}x{screen_height}+0+0")
     try:
-      png_path = resource_path(os.path.join("assets", "new_main_app_logo.png"))
+      png_path = resource_path(os.path.join("assets", "data-management.png"))
       if os.path.exists(png_path):
         self.iconphoto(True, tk.PhotoImage(file=png_path))
     except Exception as e:
@@ -255,14 +255,23 @@ class TraceabilityApp(tk.Tk):
       except Exception as e:
         pass
       
-      if self.is_admin:
-        if hasattr(self, 'lbl_header_warning'):
-          self.lbl_header_warning.config(text=f" You are {display_name}, Please don't forget to logout!")
-          self.lbl_header_warning.pack(side=tk.RIGHT, padx=20)
-        if hasattr(self, 'notebook') and hasattr(self, 'tab3'):
-          self.notebook.add(self.tab3, text="KPIs")
-          if hasattr(self, 'refresh_kpis'):
-            self.refresh_kpis()
+      if hasattr(self, 'logout_btn'): self.logout_btn.pack_forget()
+      if hasattr(self, 'settings_btn'): self.settings_btn.pack_forget()
+      if hasattr(self, 'lbl_header_user'): self.lbl_header_user.pack_forget()
+      if hasattr(self, 'lbl_header_warning'): self.lbl_header_warning.pack_forget()
+      
+      if hasattr(self, 'logout_btn'):
+        self.logout_btn.pack(side=tk.RIGHT, padx=10)
+        
+      if self.is_admin and hasattr(self, 'settings_btn'):
+        self.settings_btn.pack(side=tk.RIGHT, padx=5)
+        
+      if hasattr(self, 'lbl_header_user'):
+        self.lbl_header_user.pack(side=tk.RIGHT, padx=15)
+        
+      if self.is_admin and hasattr(self, 'lbl_header_warning'):
+        self.lbl_header_warning.config(text=f" You are {display_name}, Please don't forget to logout!")
+        self.lbl_header_warning.pack(side=tk.RIGHT, padx=10)
         
       login_win.destroy()
       # Initialize default shift for manual entry
@@ -395,21 +404,29 @@ class TraceabilityApp(tk.Tk):
 
   def open_settings(self):
     top = tk.Toplevel(self)
-    top.title("Settings")
-    w = 600 if self.is_admin else 450
-    h = 400 if self.is_admin else 200
+    top.title("System Settings & Management")
+    w = 600 if self.is_admin else 500
+    h = 450 if self.is_admin else 250
     center_window(top, w, h)
     
     top.configure(bg=BG_COLOR)
     top.transient(self)
     top.grab_set()
     
-    tk.Label(top, text="Printer Settings", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L).pack(pady=(10, 5))
+    header = tk.Frame(top, bg="#005A8C", height=60)
+    header.pack(fill=tk.X)
+    header.pack_propagate(False)
+    tk.Label(header, text="⚙️ Settings & Management", bg="#005A8C", fg="white", font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT, padx=20, pady=15)
     
-    frame = tk.Frame(top, bg=BG_COLOR)
-    frame.pack(pady=10)
+    main_frame = tk.Frame(top, bg=BG_COLOR)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
     
-    tk.Label(frame, text="Zebra Printer:", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(side=tk.LEFT)
+    _, p_content = self.create_card(main_frame, "🖨️ Printer Configuration")
+    
+    lbl_frame = tk.Frame(p_content, bg=SURFACE_COLOR)
+    lbl_frame.pack(fill=tk.X, pady=(10, 5))
+    
+    tk.Label(lbl_frame, text="Zebra Printer:", bg=SURFACE_COLOR, fg=TEXT_COLOR, font=HMI_FONT_M).pack(side=tk.LEFT, padx=5)
     
     printers = []
     if WIN32_PRINT_AVAILABLE:
@@ -419,8 +436,8 @@ class TraceabilityApp(tk.Tk):
       except Exception as e:
         pass
     
-    cb = ttk.Combobox(frame, values=printers, state="readonly", width=35)
-    cb.pack(side=tk.LEFT, padx=10)
+    cb = ttk.Combobox(lbl_frame, values=printers, state="readonly", width=35, font=HMI_FONT_M)
+    cb.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
     
     config = {}
     if os.path.exists(CONFIG_FILE):
@@ -439,23 +456,32 @@ class TraceabilityApp(tk.Tk):
       config["zebra_printer"] = cb.get()
       with open(CONFIG_FILE, "w") as f:
         json.dump(config, f)
-      top.destroy()
-      messagebox.showinfo("Saved", "Settings saved successfully.")
+      messagebox.showinfo("Saved", "Printer settings saved successfully.", parent=top)
       
-    ttk.Button(top, text="Save Settings", style="Success.TButton", command=save).pack(pady=10)
+    ttk.Button(p_content, text="Save Printer", style="Success.TButton", command=save).pack(side=tk.RIGHT, pady=(5, 10), padx=5)
     
     if self.is_admin or self.app_user_role in ["Supervisor", "Manager"]:
-      tk.Frame(top, bg=BORDER_COLOR, height=2).pack(fill=tk.X, padx=20, pady=10)
-      tk.Label(top, text="Management Tools", bg=BG_COLOR, fg=TEXT_COLOR, font=HMI_FONT_L).pack(pady=(5, 5))
+      tk.Frame(main_frame, bg=BG_COLOR, height=10).pack(fill=tk.X)
       
-      admin_frame = tk.Frame(top, bg=BG_COLOR)
-      admin_frame.pack(fill=tk.X, padx=20, pady=10)
+      _, m_content = self.create_card(main_frame, "🛠️ Management Tools")
       
-      ttk.Button(admin_frame, text="Manage Targets", style="Success.TButton", command=self.open_targets_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+      grid_frame = tk.Frame(m_content, bg=SURFACE_COLOR)
+      grid_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=15)
+      
+      btn_targets = ttk.Button(grid_frame, text="🎯 Manage Targets", style="Success.TButton", command=self.open_targets_manager)
+      btn_targets.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+      grid_frame.columnconfigure(0, weight=1)
+      
       if self.is_admin:
-        ttk.Button(admin_frame, text="Manage Products", style="Primary.TButton", command=self.open_product_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
-        ttk.Button(admin_frame, text="Audit Logs", style="Primary.TButton", command=self.open_logs_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
-        ttk.Button(admin_frame, text="Manage Users", style="Warning.TButton", command=self.open_user_manager).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        btn_prods = ttk.Button(grid_frame, text="📦 Manage Products", style="Primary.TButton", command=self.open_product_manager)
+        btn_prods.grid(row=0, column=1, sticky="ew", padx=10, pady=10)
+        grid_frame.columnconfigure(1, weight=1)
+        
+        btn_logs = ttk.Button(grid_frame, text="📋 System Logs", style="Secondary.TButton", command=self.open_logs_manager)
+        btn_logs.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
+        
+        btn_users = ttk.Button(grid_frame, text="👥 Manage Users", style="Warning.TButton", command=self.open_user_manager)
+        btn_users.grid(row=1, column=1, sticky="ew", padx=10, pady=10)
 
   def open_targets_manager(self):
     top = tk.Toplevel(self)
@@ -913,7 +939,6 @@ class TraceabilityApp(tk.Tk):
       tk.Label(self.header_frame, text="HI-LEX ACT - SUB-PROCESS TRACEABILITY", bg=HEADER_BG, fg=HEADER_FG, font=HMI_FONT_L).pack(side=tk.LEFT, padx=20)
     
     self.settings_btn = ttk.Button(self.header_frame, text="Settings", style="Header.TButton", command=self.open_settings)
-    self.settings_btn.pack(side=tk.RIGHT, padx=20)
     
     def do_logout():
       self.perform_logout(force=False)
@@ -989,6 +1014,7 @@ class TraceabilityApp(tk.Tk):
     self.recent_pns_listbox.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
     
     ttk.Button(self.sidebar, text="Open Excel", style="Secondary.TButton", command=self.open_excel).pack(fill=tk.X, padx=10, pady=2)
+    ttk.Button(self.sidebar, text="Sync/Rebuild Excel", style="Primary.TButton", command=self.rebuild_excel).pack(fill=tk.X, padx=10, pady=2)
     ttk.Button(self.sidebar, text="Print Last Slip", style="Warning.TButton", command=self.print_last_slip).pack(fill=tk.X, padx=10, pady=2)
     
     # Notebook
@@ -1008,7 +1034,6 @@ class TraceabilityApp(tk.Tk):
     self.notebook.add(self.tab2, text="Records")
     self.notebook.add(self.tab_inventory, text="Live Inventory")
     self.notebook.add(self.tab3, text="KPIs")
-    self.notebook.hide(self.tab3)
     
     self.build_tab1()
     self.build_tab5()
@@ -1019,6 +1044,8 @@ class TraceabilityApp(tk.Tk):
     
     self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
     self._check_quality_rate()
+    self.check_excel_status()
+    self.check_excel_status()
 
   def perform_logout(self, force=False):
     if not force:
@@ -1043,8 +1070,8 @@ class TraceabilityApp(tk.Tk):
     self.lbl_header_user.config(text="User: - | Shift: -")
     if hasattr(self, 'lbl_header_warning'):
       self.lbl_header_warning.pack_forget()
-    if hasattr(self, 'notebook') and hasattr(self, 'tab3'):
-      self.notebook.hide(self.tab3)
+    if hasattr(self, 'settings_btn'):
+      self.settings_btn.pack_forget()
     self.prompt_login()
     
   def _on_tab_changed(self, event):
@@ -1218,18 +1245,25 @@ class TraceabilityApp(tk.Tk):
     # Section 2: Batch & Qty
     _, lf2 = self.create_card(self.form_col_right, "Batch Numbers & Quantity")
     
-    ttk.Label(lf2, text="Batch No. (1/2/3)", font=HMI_FONT_S, width=20).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    ttk.Label(lf2, text="Batch No. (1-4)", font=HMI_FONT_S, width=20).grid(row=0, column=0, sticky="w", pady=2, padx=5)
     b_frame = tk.Frame(lf2, bg=SURFACE_COLOR)
     b_frame.grid(row=0, column=1, sticky="ew", pady=2, padx=5)
     self.var_b1 = tk.StringVar()
     self.var_b2 = tk.StringVar()
     self.var_b3 = tk.StringVar()
+    self.var_b4 = tk.StringVar()
     self.var_b1.trace_add("write", lambda *args: self.var_b1.set(self.var_b1.get().upper()))
     self.var_b2.trace_add("write", lambda *args: self.var_b2.set(self.var_b2.get().upper()))
     self.var_b3.trace_add("write", lambda *args: self.var_b3.set(self.var_b3.get().upper()))
-    ttk.Entry(b_frame, textvariable=self.var_b1).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
-    ttk.Entry(b_frame, textvariable=self.var_b2).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-    ttk.Entry(b_frame, textvariable=self.var_b3).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+    self.var_b4.trace_add("write", lambda *args: self.var_b4.set(self.var_b4.get().upper()))
+    self.entry_b1 = ttk.Entry(b_frame, textvariable=self.var_b1)
+    self.entry_b1.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+    self.entry_b2 = ttk.Entry(b_frame, textvariable=self.var_b2)
+    self.entry_b2.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+    self.entry_b3 = ttk.Entry(b_frame, textvariable=self.var_b3)
+    self.entry_b3.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+    self.entry_b4 = ttk.Entry(b_frame, textvariable=self.var_b4)
+    self.entry_b4.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
     
     ttk.Label(lf2, text="Quantity", font=HMI_FONT_S, width=20).grid(row=1, column=0, sticky="w", pady=2, padx=5)
     q_frame = tk.Frame(lf2, bg=SURFACE_COLOR)
@@ -2151,6 +2185,12 @@ class TraceabilityApp(tk.Tk):
       w.destroy()
     self.rm_widgets.clear()
     self.rm_vars_t1 = []
+    
+    if hasattr(self, 'entry_b1'):
+      self.entry_b1.pack_forget()
+      self.entry_b2.pack_forget()
+      self.entry_b3.pack_forget()
+      self.entry_b4.pack_forget()
 
     if sf_pn in SF_DATA:
       val = SF_DATA[sf_pn]
@@ -2176,6 +2216,12 @@ class TraceabilityApp(tk.Tk):
         self.rm_widgets.extend([lbl_ref, cb, lbl_name, en_name])
         self.rm_vars_t1.append((cb_var, name_var))
 
+      rm_len = len(rm_list)
+      if rm_len >= 1: self.entry_b1.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+      if rm_len >= 2: self.entry_b2.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+      if rm_len >= 3: self.entry_b3.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+      if rm_len >= 4: self.entry_b4.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
   def update_sub_batch_preview(self):
     self.update_stats()
     pass
@@ -2194,9 +2240,15 @@ class TraceabilityApp(tk.Tk):
       w.destroy()
     self.rm_widgets.clear()
     self.rm_vars_t1 = []
+    if hasattr(self, 'entry_b1'):
+      self.entry_b1.pack_forget()
+      self.entry_b2.pack_forget()
+      self.entry_b3.pack_forget()
+      self.entry_b4.pack_forget()
     self.var_b1.set("")
     self.var_b2.set("")
     self.var_b3.set("")
+    self.var_b4.set("")
     self.var_qty.set("")
     self.cb_shift_sp.set("")
     self.var_op_id.set("")
@@ -2251,17 +2303,18 @@ class TraceabilityApp(tk.Tk):
       messagebox.showerror("Error", "Please fill all required fields ().")
       return
       
-    if not any([self.var_b1.get().strip(), self.var_b2.get().strip(), self.var_b3.get().strip()]):
-      messagebox.showerror("Error", "Please provide at least one Batch Number.")
-      return
-      
     rm_pns = [""] * 4
     rm_names = [""] * 4
+    batches = [self.var_b1.get().strip(), self.var_b2.get().strip(), self.var_b3.get().strip(), self.var_b4.get().strip()]
+    
     for idx, (cb_var, name_var) in enumerate(self.rm_vars_t1):
       if not cb_var.get():
         messagebox.showerror("Error", "Please fill all RM Reference fields.")
         return
       if idx < 4:
+        if not batches[idx]:
+          messagebox.showerror("Error", f"Please provide Batch Number {idx+1} for RM {idx+1}.")
+          return
         rm_pns[idx] = cb_var.get()
         rm_names[idx] = name_var.get()
 
@@ -2516,7 +2569,7 @@ class TraceabilityApp(tk.Tk):
       sb_id, sf_pn, self.var_part_sf.get(), 
       rm_pns[0], rm_names[0], rm_pns[1], rm_names[1],
       rm_pns[2], rm_names[2], rm_pns[3], rm_names[3],
-      self.var_b1.get(), self.var_b2.get(), self.var_b3.get(), qty,
+      self.var_b1.get().strip(), self.var_b2.get().strip(), self.var_b3.get().strip(), self.var_b4.get().strip(), qty,
       shift_sp, op_id, station, dt_sp, dt_line,
       shift_line, self.txt_remarks.get("1.0", tk.END).strip(),
       record_status, created_at, registered_by
@@ -2528,10 +2581,10 @@ class TraceabilityApp(tk.Tk):
           sub_batch_id, pn_sf, part_sf, 
           rm1_pn, rm1_name, rm2_pn, rm2_name,
           rm3_pn, rm3_name, rm4_pn, rm4_name,
-          batch1, batch2, batch3, quantity,
+          batch1, batch2, batch3, batch4, quantity,
           shift_sp, op_id, station, dt_sp, dt_line,
           shift_line, remarks, status, created_at, registered_by
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ''', data)
       conn.commit()
     except sqlite3.IntegrityError:
@@ -2551,7 +2604,7 @@ class TraceabilityApp(tk.Tk):
       sb_id, sf_pn, self.var_part_sf.get(), 
       rm_pns[0], rm_names[0], rm_pns[1], rm_names[1],
       rm_pns[2], rm_names[2], rm_pns[3], rm_names[3],
-      self.var_b1.get(), self.var_b2.get(), self.var_b3.get(), qty,
+      self.var_b1.get().strip(), self.var_b2.get().strip(), self.var_b3.get().strip(), self.var_b4.get().strip(), qty,
       shift_sp, op_id, station, dt_sp, dt_line,
       shift_line, self.txt_remarks.get("1.0", tk.END).strip(),
       registered_by
@@ -2943,7 +2996,7 @@ class TraceabilityApp(tk.Tk):
     paned = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
     paned.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
-    left_pane = tk.Frame(paned, bg=BG_COLOR, width=560)
+    left_pane = tk.Frame(paned, bg=BG_COLOR, width=650)
     paned.add(left_pane, weight=0)
     
     right_pane = tk.Frame(paned, bg=BG_COLOR)
@@ -2957,10 +3010,10 @@ class TraceabilityApp(tk.Tk):
     row1.pack(fill=tk.BOTH, expand=True)
 
     _, agg_card = self.create_card(row1, "Summary by Part Number (Right-Click to Set Min Threshold)")
-    cols_agg = ("PN", "Part Name", "Total", "Min", "Boxes")
+    cols_agg = ("Part Number", "Part Name", "Total", "Min", "Boxes")
     self.tree_inv_agg = ttk.Treeview(agg_card, columns=cols_agg, show="headings", height=8)
     for col in cols_agg: self.tree_inv_agg.heading(col, text=col)
-    self.tree_inv_agg.column("PN", width=170); self.tree_inv_agg.column("Part Name", width=190); self.tree_inv_agg.column("Total", width=60); self.tree_inv_agg.column("Min", width=50); self.tree_inv_agg.column("Boxes", width=55)
+    self.tree_inv_agg.column("Part Number", width=190); self.tree_inv_agg.column("Part Name", width=190); self.tree_inv_agg.column("Total", width=50); self.tree_inv_agg.column("Min", width=40); self.tree_inv_agg.column("Boxes", width=120)
     self.tree_inv_agg.pack(fill=tk.BOTH, expand=True, pady=10, padx=10)
     
     self.tree_inv_agg.tag_configure("low_wip", background="#FFEBEE", foreground="#C62828")
@@ -3711,12 +3764,12 @@ class TraceabilityApp(tk.Tk):
       if not os.path.exists(EXCEL_FILE):
         wb = Workbook()
         ws = wb.active
-        ws.title = "Advanced KPI Reports"
+        ws.title = "KPI Reports"
       else:
         wb = load_workbook(EXCEL_FILE)
-        if "Advanced KPI Reports" in wb.sheetnames:
-          del wb["Advanced KPI Reports"]
-        ws = wb.create_sheet("Advanced KPI Reports", 0)
+        if "KPI Reports" in wb.sheetnames:
+          del wb["KPI Reports"]
+        ws = wb.create_sheet("KPI Reports", 0)
           
         # Clean up old sheet if exists
         if "KPI Reports" in wb.sheetnames:
@@ -3965,7 +4018,7 @@ class TraceabilityApp(tk.Tk):
         pystray.MenuItem('Exit Completely', quit_window)
       )
 
-      icon_path = resource_path(os.path.join("assets", "taskbar_logo.png"))
+      icon_path = resource_path(os.path.join("assets", "data-management.png"))
       if os.path.exists(icon_path):
         image = Image.open(icon_path)
       else:
@@ -3977,7 +4030,43 @@ class TraceabilityApp(tk.Tk):
     except ImportError:
       self.destroy()
 
+  def open_excel(self):
+    from config import EXCEL_FILE
+    if os.path.exists(EXCEL_FILE):
+      try:
+        os.startfile(EXCEL_FILE)
+      except AttributeError:
+        import subprocess
+        subprocess.call(['open', EXCEL_FILE])
+    else:
+      messagebox.showwarning("Not Found", "Excel file does not exist yet. Please save a record first.")
+
+  def rebuild_excel(self):
+    if messagebox.askyesno("Rebuild Excel", "This will completely recreate the Excel file from the database to ensure it's 100% up to date.\n\nPlease ensure the Excel file is CLOSED before proceeding.\n\nContinue?"):
+      from excel_services import queue_excel_task, rebuild_excel_from_db
+      queue_excel_task(rebuild_excel_from_db)
+      messagebox.showinfo("Queued", "Excel rebuild task has been queued! The file will be recreated in the background.")
+
+  def check_excel_status(self):
+    import excel_services
+    if getattr(excel_services, 'excel_error_state', False):
+      if hasattr(self, 'lbl_excel_error') and self.lbl_excel_error.winfo_exists():
+        self.lbl_excel_error.pack(side=tk.RIGHT, padx=10)
+      else:
+        self.lbl_excel_error = tk.Label(self.header_frame, text=" ⚠️ PLEASE CLOSE EXCEL FILE TO ALLOW SAVING! ", bg="#DC2626", fg="#FFFFFF", font=("Segoe UI", 11, "bold"))
+        self.lbl_excel_error.pack(side=tk.RIGHT, padx=10)
+    else:
+      if hasattr(self, 'lbl_excel_error') and self.lbl_excel_error.winfo_exists():
+        self.lbl_excel_error.pack_forget()
+        
+    self.after(2000, self.check_excel_status)
+
 if __name__ == "__main__":
   init_db()
+  
+  # Automatically sync and rebuild Excel in the background on startup
+  from excel_services import queue_excel_task, rebuild_excel_from_db
+  queue_excel_task(rebuild_excel_from_db)
+  
   app = TraceabilityApp()
   app.mainloop()

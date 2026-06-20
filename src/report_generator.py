@@ -121,11 +121,17 @@ def generate_shift_pdf_report(target_date, shift_db_value):
                  GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC LIMIT 15''')
     inventory_wip = c.fetchall()
     
-    c.execute('''SELECT rm1_pn, rm1_name, COUNT(DISTINCT batch1)
-                 FROM records
-                 WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ? AND rm1_pn IS NOT NULL AND rm1_pn != ""
-                 GROUP BY rm1_pn, rm1_name
-                 ORDER BY COUNT(DISTINCT batch1) DESC''', (target_date, shift_db_value))
+    c.execute('''SELECT rm_pn, rm_name, COUNT(DISTINCT batch) FROM (
+                   SELECT rm1_pn as rm_pn, rm1_name as rm_name, batch1 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ? AND rm1_pn IS NOT NULL AND rm1_pn != ""
+                   UNION ALL
+                   SELECT rm2_pn as rm_pn, rm2_name as rm_name, batch2 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ? AND rm2_pn IS NOT NULL AND rm2_pn != ""
+                   UNION ALL
+                   SELECT rm3_pn as rm_pn, rm3_name as rm_name, batch3 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ? AND rm3_pn IS NOT NULL AND rm3_pn != ""
+                   UNION ALL
+                   SELECT rm4_pn as rm_pn, rm4_name as rm_name, batch4 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND shift_sp = ? AND rm4_pn IS NOT NULL AND rm4_pn != ""
+                 )
+                 GROUP BY rm_pn, rm_name
+                 ORDER BY COUNT(DISTINCT batch) DESC''', (target_date, shift_db_value, target_date, shift_db_value, target_date, shift_db_value, target_date, shift_db_value))
     rm_usage = c.fetchall()
     
     c.execute('''SELECT op_id, GROUP_CONCAT(DISTINCT reason), SUM(duration_min)
@@ -198,11 +204,17 @@ def generate_daily_pdf_report(start_dt, end_dt):
                  GROUP BY r.pn_sf ORDER BY SUM(r.quantity) DESC LIMIT 15''')
     inventory_wip = c.fetchall()
     
-    c.execute('''SELECT rm1_pn, rm1_name, COUNT(DISTINCT batch1)
-                 FROM records
-                 WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND rm1_pn IS NOT NULL AND rm1_pn != ""
-                 GROUP BY rm1_pn, rm1_name
-                 ORDER BY COUNT(DISTINCT batch1) DESC''', (target_date,))
+    c.execute('''SELECT rm_pn, rm_name, COUNT(DISTINCT batch) FROM (
+                   SELECT rm1_pn as rm_pn, rm1_name as rm_name, batch1 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND rm1_pn IS NOT NULL AND rm1_pn != ""
+                   UNION ALL
+                   SELECT rm2_pn as rm_pn, rm2_name as rm_name, batch2 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND rm2_pn IS NOT NULL AND rm2_pn != ""
+                   UNION ALL
+                   SELECT rm3_pn as rm_pn, rm3_name as rm_name, batch3 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND rm3_pn IS NOT NULL AND rm3_pn != ""
+                   UNION ALL
+                   SELECT rm4_pn as rm_pn, rm4_name as rm_name, batch4 as batch FROM records WHERE CASE WHEN CAST(substr(dt_sp, 12, 2) AS INTEGER) < 6 THEN date(substr(dt_sp, 1, 10), '-1 day') ELSE substr(dt_sp, 1, 10) END = ? AND rm4_pn IS NOT NULL AND rm4_pn != ""
+                 )
+                 GROUP BY rm_pn, rm_name
+                 ORDER BY COUNT(DISTINCT batch) DESC''', (target_date, target_date, target_date, target_date))
     rm_usage = c.fetchall()
     
     c.execute('''SELECT op_id, GROUP_CONCAT(DISTINCT reason), SUM(duration_min)

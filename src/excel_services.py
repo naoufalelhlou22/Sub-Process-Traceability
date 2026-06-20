@@ -15,16 +15,26 @@ from database import get_db_connection, logger
 # ── Excel Background Worker ───────────────────────────────────────────────────
 
 _excel_queue = queue.Queue()
+excel_error_state = False
 
 def _excel_worker():
+    import time
     while True:
         func, args, kwargs = _excel_queue.get()
-        try:
-            func(*args, **kwargs)
-        except Exception as e:
-            logger.error("Excel worker error: %s", e)
-        finally:
-            _excel_queue.task_done()
+        while True:
+            try:
+                func(*args, **kwargs)
+                global excel_error_state
+                excel_error_state = False
+                break
+            except PermissionError:
+                excel_error_state = True
+                logger.warning("Excel file is open. Retrying background save in 5 seconds...")
+                time.sleep(5)
+            except Exception as e:
+                logger.error("Excel worker error: %s", e)
+                break
+        _excel_queue.task_done()
 
 _excel_thread = threading.Thread(target=_excel_worker, daemon=True)
 _excel_thread.start()
@@ -39,6 +49,8 @@ def rebuild_excel_from_db():
   if os.path.exists(EXCEL_FILE):
     try:
       os.remove(EXCEL_FILE)
+    except PermissionError:
+      raise
     except Exception:
       pass
       
@@ -86,7 +98,8 @@ def rebuild_excel_from_db():
   for row in rows:
     change_counts = []
     rm_pns = [row["rm1_pn"], row["rm2_pn"], row["rm3_pn"], row["rm4_pn"]]
-    batches = [row["batch1"], row["batch2"], row["batch3"], row.get("batch4", "")]
+    batch4_val = row["batch4"] if "batch4" in row.keys() else ""
+    batches = [row["batch1"], row["batch2"], row["batch3"], batch4_val]
     
     for i in range(4):
       rm_pn = rm_pns[i]
@@ -105,13 +118,12 @@ def rebuild_excel_from_db():
       row["sub_batch_id"], row["pn_sf"], row["part_sf"],
       row["rm1_pn"], row["rm1_name"], row["rm2_pn"], row["rm2_name"],
       row["rm3_pn"], row["rm3_name"], row["rm4_pn"], row["rm4_name"],
-      row["batch1"], row["batch2"], row["batch3"], row.get("batch4", ""),
+      row["batch1"], row["batch2"], row["batch3"], batch4_val,
       row["quantity"], row["shift_sp"], row["op_id"], row["station"], row["dt_sp"], row["dt_line"],
       row["shift_line"], row["remarks"], row["registered_by"]
     ]
     _write_record_to_ws(ws, data, change_counts)
-    
-  wb.save(EXCEL_FILE)
+    wb.save(EXCEL_FILE)
 
 def save_to_excel(data):
   if not os.path.exists(EXCEL_FILE):
@@ -169,6 +181,8 @@ def save_to_excel(data):
     
     _write_record_to_ws(ws, data, change_counts)
     wb.save(EXCEL_FILE)
+  except PermissionError:
+    raise
   except Exception as e:
     logger.error("Error loading Excel file: %s", e)
     return
