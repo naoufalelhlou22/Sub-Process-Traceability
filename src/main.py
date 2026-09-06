@@ -42,7 +42,7 @@ except ImportError:
 class TraceabilityApp(tk.Tk):
   def __init__(self):
     super().__init__()
-    self.title(f"HI-LEX ACT - Sub-Process Traceability System v{APP_VERSION}")
+    self.title(f"HI-LEX ACT - Sub-Process Traceability System v{APP_VERSION} - By Naoufal El Hlou")
     
     # Set geometry dynamically based on the device's screen settings
     screen_width = self.winfo_screenwidth()
