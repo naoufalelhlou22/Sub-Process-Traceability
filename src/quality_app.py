@@ -16,16 +16,8 @@ import hashlib
 import binascii
 
 from config import resource_path, persistent_path, DATA_DIR, DB_FILE
+from database import get_db_connection, hash_password, verify_password
 
-def get_db_connection():
-  conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-  conn.execute('PRAGMA journal_mode=WAL')
-  return conn
-
-def hash_password(password):
-  salt = b"subproc_trace_salt_2026"
-  hash_obj = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
-  return binascii.hexlify(hash_obj).decode("utf-8")
 EXCEL_FILE = os.path.join(DATA_DIR, "quality_defects.xlsx")
 
 APP_VERSION = "1.0.0"
@@ -441,19 +433,18 @@ class QualityApp(tk.Tk):
       try:
         conn = get_db_connection()
         c = conn.cursor()
-        c.execute("SELECT role FROM auth WHERE id=? AND password=?",
-             (uid, hash_password(upass)))
-        row = c.fetchone()
+        c.execute("SELECT password, role FROM auth WHERE id=?", (uid,))
+        auth_row = c.fetchone()
         conn.close()
       except Exception as e:
         lbl_err.config(text=f"DB Error: {e}")
         return
 
-      if not row:
+      if not auth_row or not verify_password(upass, auth_row[0]):
         lbl_err.config(text="Invalid ID or Password.")
         return
 
-      role = row[0]
+      role = auth_row[1]
       if role not in ("Quality OP", "Quality Supervisor",
               "Manager", "Supervisor"):
         lbl_err.config(
