@@ -106,3 +106,90 @@
 2026-06-20 02:54:53 [WARNING] TraceabilityApp: Excel file is open. Retrying background save in 5 seconds...
 2026-06-20 02:54:58 [WARNING] TraceabilityApp: Excel file is open. Retrying background save in 5 seconds...
 2026-06-20 02:55:03 [WARNING] TraceabilityApp: Excel file is open. Retrying background save in 5 seconds...
+2026-06-24 09:18:35 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-24 09:18:35 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-24 09:18:35 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-06-23.
+2026-06-24 09:18:40 [INFO] TraceabilityApp: Detected missed report for 2026-06-23. Triggering generation...
+2026-06-24 09:18:41 [INFO] TraceabilityApp: Successfully generated missed report for 2026-06-23
+2026-06-29 18:46:42 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-29 18:46:42 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-06-29 18:46:42 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-06-28.
+2026-06-29 18:46:47 [INFO] TraceabilityApp: Detected missed report for 2026-06-28. Triggering generation...
+2026-06-29 18:46:50 [INFO] TraceabilityApp: Successfully generated missed report for 2026-06-28
+2026-07-01 23:05:07 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-01 23:05:07 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-01 23:05:07 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-06-30.
+2026-07-01 23:05:12 [INFO] TraceabilityApp: Detected missed report for 2026-06-30. Triggering generation...
+2026-07-07 13:12:22 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-07 13:12:22 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-07 13:12:22 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-06.
+2026-07-07 13:12:27 [INFO] TraceabilityApp: Detected missed report for 2026-07-06. Triggering generation...
+2026-07-07 13:12:27 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-06
+2026-07-09 11:27:15 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-09 11:27:15 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-09 11:27:15 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-08.
+2026-07-09 11:27:20 [INFO] TraceabilityApp: Detected missed report for 2026-07-08. Triggering generation...
+2026-07-09 11:27:21 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-08
+2026-07-15 13:43:02 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-15 13:43:02 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-15 13:43:02 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-14.
+2026-07-15 13:43:07 [INFO] TraceabilityApp: Detected missed report for 2026-07-14. Triggering generation...
+2026-07-15 13:43:08 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-14
+2026-07-23 15:27:17 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-23 15:27:17 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-23 15:27:17 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-22.
+2026-07-23 15:27:22 [INFO] TraceabilityApp: Detected missed report for 2026-07-22. Triggering generation...
+2026-07-23 15:27:23 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-22
+2026-07-23 15:29:53 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-07-23 15:29:53 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-07-23 15:29:55 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-07-23 15:29:55 [DEBUG] TraceabilityApp: Date parse error in inventory: strptime() argument 1 must be str, not None
+2026-07-24 14:15:42 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-24 14:15:42 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-24 14:15:42 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-23.
+2026-07-24 14:15:47 [INFO] TraceabilityApp: Detected missed report for 2026-07-23. Triggering generation...
+2026-07-24 14:15:48 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-23
+2026-07-26 13:41:58 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-26 13:41:58 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-26 13:41:58 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-25.
+2026-07-26 13:42:03 [INFO] TraceabilityApp: Detected missed report for 2026-07-25. Triggering generation...
+2026-07-26 13:42:04 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-25
+2026-07-29 16:57:32 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-29 16:57:32 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-07-29 16:57:32 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-07-28.
+2026-07-29 16:57:37 [INFO] TraceabilityApp: Detected missed report for 2026-07-28. Triggering generation...
+2026-07-29 16:57:38 [INFO] TraceabilityApp: Successfully generated missed report for 2026-07-28
+2026-08-04 11:58:02 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-04 11:58:02 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-04 11:58:02 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-08-03.
+2026-08-04 11:58:07 [INFO] TraceabilityApp: Detected missed report for 2026-08-03. Triggering generation...
+2026-08-04 11:58:08 [INFO] TraceabilityApp: Successfully generated missed report for 2026-08-03
+2026-08-13 11:56:45 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-13 11:56:45 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-13 11:56:45 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-08-12.
+2026-08-13 11:56:50 [INFO] TraceabilityApp: Detected missed report for 2026-08-12. Triggering generation...
+2026-08-27 23:59:25 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-27 23:59:25 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-27 23:59:25 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-08-26.
+2026-08-27 23:59:30 [INFO] TraceabilityApp: Detected missed report for 2026-08-26. Triggering generation...
+2026-08-27 23:59:31 [INFO] TraceabilityApp: Successfully generated missed report for 2026-08-26
+2026-08-28 19:08:32 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-28 19:08:32 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-28 19:08:32 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-08-27.
+2026-08-28 19:08:37 [INFO] TraceabilityApp: Detected missed report for 2026-08-27. Triggering generation...
+2026-08-28 19:08:38 [INFO] TraceabilityApp: Successfully generated missed report for 2026-08-27
+2026-08-30 10:57:48 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-30 10:57:48 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-08-30 10:57:48 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-08-29.
+2026-08-30 10:57:53 [INFO] TraceabilityApp: Detected missed report for 2026-08-29. Triggering generation...
+2026-08-30 10:57:54 [INFO] TraceabilityApp: Successfully generated missed report for 2026-08-29
+2026-09-03 11:02:54 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-09-03 11:02:54 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-09-03 11:02:54 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-09-02.
+2026-09-03 11:02:59 [INFO] TraceabilityApp: Detected missed report for 2026-09-02. Triggering generation...
+2026-09-03 11:03:00 [INFO] TraceabilityApp: Successfully generated missed report for 2026-09-02
+2026-09-06 12:00:21 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-09-06 12:00:21 [DEBUG] TraceabilityApp: Date parse error in snapshot: strptime() argument 1 must be str, not None
+2026-09-06 12:00:21 [INFO] TraceabilityApp: Automated Inventory Snapshot Taken for 2026-09-05.
+2026-09-06 12:00:26 [INFO] TraceabilityApp: Detected missed report for 2026-09-05. Triggering generation...
+2026-09-06 12:00:27 [INFO] TraceabilityApp: Successfully generated missed report for 2026-09-05
