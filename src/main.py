@@ -165,7 +165,7 @@ class TraceabilityApp(tk.Tk):
 
   def prompt_login(self):
     login_win = tk.Toplevel(self)
-    login_win.title("HI-LEX Login")
+    login_win.title(f"HI-LEX Login - Dev By El Hlou Naoufal - v{APP_VERSION} ")
     center_window(login_win, 400, 300)
     login_win.configure(bg=BG_COLOR)
     login_win.transient(self)
